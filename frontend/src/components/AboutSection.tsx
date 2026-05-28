@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
 import FloatingCoffeeBean from './FloatingCoffeeBean';
 import { API_BASE_URL } from '../services/db';
+import { usePerformance } from '../hooks/usePerformance';
 
 export default function AboutSection() {
+  const { isLowEnd } = usePerformance();
   return (
     <section
       id="about"
@@ -19,7 +21,7 @@ export default function AboutSection() {
       <div className="absolute bottom-1/3 right-10 w-3 h-3 gold-dust-particle" style={{ animationDelay: '5s', opacity: 0.15 }} />
       <div className="absolute bottom-10 left-1/4 w-2.5 h-2.5 gold-dust-particle" style={{ animationDelay: '1s', opacity: 0.1 }} />
 
-      {/* Atmospheric Floating Coffee Beans (4) */}
+      {/* Atmospheric Floating Coffee Beans (1) */}
       <FloatingCoffeeBean
         size={75}
         mobileSize={48}
@@ -28,36 +30,6 @@ export default function AboutSection() {
         depth="midground"
         rotation={45}
         animationDelay="2s"
-        animationDuration="13s"
-      />
-      <FloatingCoffeeBean
-        size={60}
-        mobileSize={38}
-        top="18%"
-        right="8%"
-        depth="background"
-        rotation={-10}
-        animationDelay="0s"
-        animationDuration="16s"
-      />
-      <FloatingCoffeeBean
-        size={80}
-        mobileSize={52}
-        top="78%"
-        left="8%"
-        depth="foreground"
-        rotation={95}
-        animationDelay="4s"
-        animationDuration="11s"
-      />
-      <FloatingCoffeeBean
-        size={65}
-        mobileSize={40}
-        top="68%"
-        right="4%"
-        depth="midground"
-        rotation={155}
-        animationDelay="1s"
         animationDuration="15s"
       />
 
@@ -78,13 +50,14 @@ export default function AboutSection() {
             
             {/* The image itself */}
             <img
-              src={`${API_BASE_URL}/images/b43c0ab3-fe3a-48b1-8640-12cf74c1a706.webp`}
+              loading="lazy"
+              src={`${API_BASE_URL}/images/b43c0ab3-fe3a-48b1-8640-12cf74c1a706.opt.webp`}
               alt="Artisanal Coffee Roasting Process"
               className="w-full h-[400px] md:h-[550px] object-cover object-center transform group-hover:scale-105 transition-transform duration-1000 ease-out"
             />
 
             {/* Float badge overlay */}
-            <div className="absolute bottom-8 left-8 right-8 z-20 glass-premium-card p-6 border border-warm-gold/25 max-w-sm text-left hover:translate-y-0">
+            <div className={`absolute bottom-8 left-8 right-8 z-20 glass-premium-card ${isLowEnd ? 'none-blur' : ''} p-6 border border-warm-gold/25 max-w-sm text-left hover:translate-y-0`}>
               <span className="text-[10px] font-sans tracking-[0.2em] text-warm-gold font-bold uppercase mb-1.5 block">
                 Roasting Temperature
               </span>
@@ -125,7 +98,7 @@ export default function AboutSection() {
 
             {/* Luxury Stats List */}
             <div className="grid grid-cols-2 gap-6 border-t border-warm-gold/10 pt-8 mb-8">
-              <div className="p-5 glass-premium-card border-warm-gold/5 hover:border-warm-gold/20 hover:translate-y-0 text-left">
+              <div className={`p-5 glass-premium-card ${isLowEnd ? 'none-blur' : ''} border-warm-gold/5 hover:border-warm-gold/20 hover:translate-y-0 text-left`}>
                 <span className="text-[10px] font-sans tracking-widest text-warm-gold/60 uppercase block mb-1 font-bold">
                   Estate Elevation
                 </span>
@@ -137,7 +110,7 @@ export default function AboutSection() {
                 </p>
               </div>
 
-              <div className="p-5 glass-premium-card border-warm-gold/5 hover:border-warm-gold/20 hover:translate-y-0 text-left">
+              <div className={`p-5 glass-premium-card ${isLowEnd ? 'none-blur' : ''} border-warm-gold/5 hover:border-warm-gold/20 hover:translate-y-0 text-left`}>
                 <span className="text-[10px] font-sans tracking-widest text-warm-gold/60 uppercase block mb-1 font-bold">
                   Ethically Sourced
                 </span>

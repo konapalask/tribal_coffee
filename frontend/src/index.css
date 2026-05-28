@@ -21,8 +21,8 @@
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-15px) rotate(2deg); }
+  0%, 100% { transform: translate3d(0, 0px, 0) rotate(0deg); }
+  50% { transform: translate3d(0, -15px, 0) rotate(2deg); }
 }
 
 @keyframes smoke {
@@ -98,17 +98,25 @@ html, body {
 
 /* Premium Utilities */
 .glassmorphism {
-  background: rgba(17, 17, 17, 0.4);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
+  background: rgba(17, 17, 17, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(200, 169, 126, 0.1);
 }
 
 .glassmorphism-light {
   background: rgba(231, 216, 201, 0.05);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(231, 216, 201, 0.1);
+}
+
+/* Fallback for low-performance devices */
+.none-blur {
+  background: rgba(17, 17, 17, 0.95) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(200, 169, 126, 0.15) !important;
 }
 
 /* Custom Noise Overlay - Removed for high-end cinematic experience */
@@ -173,19 +181,28 @@ html, body {
 
 /* World-Class Glassmorphic Cards */
 .glass-premium-card {
-  background: linear-gradient(135deg, rgba(26, 18, 13, 0.6) 0%, rgba(15, 11, 8, 0.8) 100%);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
-  border: 1.5px solid rgba(214, 178, 122, 0.1);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.65);
+  background: linear-gradient(135deg, rgba(26, 18, 13, 0.7) 0%, rgba(15, 11, 8, 0.9) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(214, 178, 122, 0.12);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   border-radius: 28px;
-  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.6s ease, box-shadow 0.6s ease;
+  will-change: transform;
 }
 
 .glass-premium-card:hover {
   border-color: rgba(214, 178, 122, 0.3);
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 25px rgba(214, 178, 122, 0.15);
-  transform: translateY(-8px);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.7), 0 0 15px rgba(214, 178, 122, 0.1);
+  transform: translate3d(0, -8px, 0);
+}
+
+/* Fallback for low-performance premium cards */
+.none-blur.glass-premium-card {
+  background: #18120e !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55) !important;
 }
 
 /* Premium luxury CTA Button */

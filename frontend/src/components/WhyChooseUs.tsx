@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Flame, Leaf, Wind, Zap } from 'lucide-react';
 import FloatingCoffeeBean from './FloatingCoffeeBean';
+import { usePerformance } from '../hooks/usePerformance';
 
 const ADVANTAGES = [
   {
@@ -30,6 +31,7 @@ const ADVANTAGES = [
 ];
 
 export default function WhyChooseUs() {
+  const { isLowEnd } = usePerformance();
   return (
     <section
       id="collections"
@@ -46,7 +48,7 @@ export default function WhyChooseUs() {
       <div className="absolute bottom-1/3 left-1/3 w-3 h-3 gold-dust-particle" style={{ animationDelay: '6s', opacity: 0.18 }} />
       <div className="absolute bottom-10 right-1/4 w-2.5 h-2.5 gold-dust-particle" style={{ animationDelay: '2s', opacity: 0.12 }} />
 
-      {/* Atmospheric Floating Coffee Beans (4) */}
+      {/* Atmospheric Floating Coffee Beans (1) */}
       <FloatingCoffeeBean
         size={65}
         mobileSize={40}
@@ -55,37 +57,7 @@ export default function WhyChooseUs() {
         depth="background"
         rotation={-20}
         animationDelay="1.5s"
-        animationDuration="14s"
-      />
-      <FloatingCoffeeBean
-        size={75}
-        mobileSize={48}
-        top="25%"
-        right="4%"
-        depth="midground"
-        rotation={50}
-        animationDelay="0.5s"
-        animationDuration="12s"
-      />
-      <FloatingCoffeeBean
-        size={80}
-        mobileSize={52}
-        top="75%"
-        left="3%"
-        depth="foreground"
-        rotation={110}
-        animationDelay="3s"
         animationDuration="15s"
-      />
-      <FloatingCoffeeBean
-        size={58}
-        mobileSize={36}
-        top="82%"
-        right="8%"
-        depth="midground"
-        rotation={-65}
-        animationDelay="2.5s"
-        animationDuration="17s"
       />
 
       <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
@@ -116,7 +88,7 @@ export default function WhyChooseUs() {
                 viewport={{ once: true, margin: '-100px' }}
                 transition={{ duration: 0.8, delay: idx * 0.15, ease: [0.16, 1, 0.3, 1] }}
                 id={`advantage-card-${item.id}`}
-                className="group relative glass-premium-card p-8 flex flex-col items-center text-center h-full"
+                className={`group relative glass-premium-card ${isLowEnd ? 'none-blur' : ''} p-8 flex flex-col items-center text-center h-full`}
               >
                 {/* Gold Highlight backing circle */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full filter blur-[35px] bg-warm-gold/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />

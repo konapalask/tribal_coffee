@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { ShoppingBag, Eye, Heart } from 'lucide-react';
 import { TRIBAL_PRODUCTS, type RealProduct, API_BASE_URL } from '../services/db';
 import FloatingCoffeeBean from './FloatingCoffeeBean';
+import { usePerformance } from '../hooks/usePerformance';
 
 interface ProductShowcaseProps {
   onAddToBag: (product: RealProduct) => void;
@@ -11,6 +12,7 @@ interface ProductShowcaseProps {
 }
 
 export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, onToggleWishlist }: ProductShowcaseProps) {
+  const { isLowEnd } = usePerformance();
   return (
     <section
       id="shop"
@@ -43,7 +45,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
       <div className="absolute bottom-10 left-1/3 w-2.5 h-2.5 gold-dust-particle" style={{ animationDelay: '2s', opacity: 0.1 }} />
       <div className="absolute bottom-1/4 right-10 w-3 h-3 gold-dust-particle" style={{ animationDelay: '7s', opacity: 0.18 }} />
 
-      {/* Atmospheric Floating Coffee Beans (5) */}
+      {/* Atmospheric Floating Coffee Beans (1) */}
       <FloatingCoffeeBean
         size={70}
         mobileSize={45}
@@ -52,47 +54,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
         depth="midground"
         rotation={25}
         animationDelay="1s"
-        animationDuration="14s"
-      />
-      <FloatingCoffeeBean
-        size={55}
-        mobileSize={35}
-        top="15%"
-        right="6%"
-        depth="background"
-        rotation={-40}
-        animationDelay="3s"
-        animationDuration="12s"
-      />
-      <FloatingCoffeeBean
-        size={85}
-        mobileSize={55}
-        top="72%"
-        left="-2%"
-        depth="foreground"
-        rotation={80}
-        animationDelay="0s"
-        animationDuration="16s"
-      />
-      <FloatingCoffeeBean
-        size={60}
-        mobileSize={38}
-        top="85%"
-        right="5%"
-        depth="midground"
-        rotation={120}
-        animationDelay="2s"
         animationDuration="15s"
-      />
-      <FloatingCoffeeBean
-        size={45}
-        mobileSize={30}
-        top="45%"
-        left="45%"
-        depth="background"
-        rotation={-15}
-        animationDelay="5s"
-        animationDuration="18s"
       />
 
       <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
@@ -126,7 +88,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
               viewport={{ once: true, margin: '-100px' }}
               transition={{ duration: 0.8, delay: idx * 0.1, ease: [0.16, 1, 0.3, 1] }}
               id={`showcase-card-${product.id}`}
-              className="group relative glass-premium-card p-8 flex flex-col justify-between overflow-hidden text-left h-full"
+              className={`group relative glass-premium-card ${isLowEnd ? 'none-blur' : ''} p-8 flex flex-col justify-between overflow-hidden text-left h-full`}
             >
               {/* Backing Warm Light Overlay */}
               <div 
@@ -162,6 +124,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
                 <div className="absolute w-44 h-8 rounded-full bg-black/60 filter blur-xl bottom-4 opacity-80 group-hover:scale-x-95 transition-all duration-700" />
                 
                 <img
+                  loading="lazy"
                   onClick={() => onViewDetails(product)}
                   src={product.image.startsWith('http') ? product.image : `${API_BASE_URL}${product.image}`}
                   alt={product.name}

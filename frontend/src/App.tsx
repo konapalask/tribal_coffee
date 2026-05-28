@@ -453,7 +453,7 @@ export default function App() {
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-black/40">
                     <div className="w-32 h-32 mb-6 rounded-2xl overflow-hidden border border-warm-gold/20 shadow-[0_10px_30px_rgba(0,0,0,0.8)] relative">
                       <div className="absolute inset-0 bg-warm-gold/10 mix-blend-overlay z-10"></div>
-                      <img src={`${API_BASE_URL}/images/dispatch_vault.png`} alt="Dispatch Vault" className="w-full h-full object-cover filter contrast-125 sepia-[.2]" />
+                      <img loading="lazy" src={`${API_BASE_URL}/images/dispatch_vault.opt.webp`} alt="Dispatch Vault" className="w-full h-full object-cover filter contrast-125 sepia-[.2]" />
                     </div>
                     <h5 className="font-playfair text-xl text-cream-latte mb-1 animate-pulse">Pre-Dispatch Stage</h5>
                     <p className="text-[10px] text-cream-latte/50 max-w-[220px] leading-relaxed">

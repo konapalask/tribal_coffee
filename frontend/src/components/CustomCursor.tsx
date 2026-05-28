@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
+import { usePerformance } from '../hooks/usePerformance';
 
 export default function CustomCursor({ isAdminActive = false }: { isAdminActive?: boolean }) {
+  const { isLowEnd } = usePerformance();
   const cursorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isAdminActive) return;
+    if (isAdminActive || isLowEnd) return;
     const cursor = cursorRef.current;
     if (!cursor) return;
 
@@ -65,7 +67,7 @@ export default function CustomCursor({ isAdminActive = false }: { isAdminActive?
     };
   }, [isAdminActive]);
 
-  if (isAdminActive) return null;
+  if (isAdminActive || isLowEnd) return null;
 
   return (
     <div 

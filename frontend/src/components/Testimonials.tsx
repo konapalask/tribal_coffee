@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Star, Quote } from 'lucide-react';
 import FloatingCoffeeBean from './FloatingCoffeeBean';
+import { usePerformance } from '../hooks/usePerformance';
 
 const TESTIMONIALS = [
   {
@@ -30,6 +31,7 @@ const TESTIMONIALS = [
 ];
 
 export default function Testimonials() {
+  const { isLowEnd } = usePerformance();
   return (
     <section
       id="testimonials"
@@ -45,7 +47,7 @@ export default function Testimonials() {
       <div className="absolute top-1/4 right-12 w-2 h-2 gold-dust-particle" style={{ animationDelay: '1s', opacity: 0.12 }} />
       <div className="absolute bottom-1/3 left-12 w-3.5 h-3.5 gold-dust-particle" style={{ animationDelay: '4s', opacity: 0.18 }} />
 
-      {/* Atmospheric Floating Coffee Beans (4) */}
+      {/* Atmospheric Floating Coffee Beans (1) */}
       <FloatingCoffeeBean
         size={72}
         mobileSize={46}
@@ -54,37 +56,7 @@ export default function Testimonials() {
         depth="midground"
         rotation={15}
         animationDelay="2s"
-        animationDuration="14s"
-      />
-      <FloatingCoffeeBean
-        size={58}
-        mobileSize={36}
-        top="16%"
-        right="6%"
-        depth="background"
-        rotation={-35}
-        animationDelay="1s"
-        animationDuration="13s"
-      />
-      <FloatingCoffeeBean
-        size={82}
-        mobileSize={54}
-        top="78%"
-        left="2%"
-        depth="foreground"
-        rotation={105}
-        animationDelay="0s"
         animationDuration="15s"
-      />
-      <FloatingCoffeeBean
-        size={66}
-        mobileSize={42}
-        top="84%"
-        right="8%"
-        depth="midground"
-        rotation={165}
-        animationDelay="3s"
-        animationDuration="16s"
       />
 
       <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
@@ -112,16 +84,7 @@ export default function Testimonials() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-100px' }}
               transition={{ duration: 0.8, delay: idx * 0.15, ease: [0.16, 1, 0.3, 1] }}
-              animate={{ 
-                y: [0, idx % 2 === 0 ? -6 : 6, 0] 
-              }}
-              transition-repeat="infinite"
-              // Custom continuous float for each card with slightly offset durations
-              className="glass-premium-card p-8 md:p-10 flex flex-col justify-between relative h-full"
-              style={{
-                animation: `float ${6 + idx}s ease-in-out infinite`,
-                animationDelay: `${idx * 0.5}s`
-              }}
+              className={`glass-premium-card ${isLowEnd ? 'none-blur' : ''} p-8 md:p-10 flex flex-col justify-between relative h-full transition-all duration-300 hover:-translate-y-2`}
               id={`testimonial-card-${item.id}`}
             >
               {/* Quote Icon styling */}

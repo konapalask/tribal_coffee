@@ -1,5 +1,6 @@
 import { useId, useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { usePerformance } from '../hooks/usePerformance';
 
 interface FloatingCoffeeBeanProps {
   size: number;
@@ -48,7 +49,12 @@ export default function FloatingCoffeeBean({
   mousePos = { x: 0, y: 0 },
   className = ''
 }: FloatingCoffeeBeanProps) {
+  const { isLowEnd } = usePerformance();
   const gradientId = useId();
+
+  if (isLowEnd) {
+    return null;
+  }
   // Safe CSS selector name from useId (which contains colons like :r1:)
   const safeClassName = `bean-${gradientId.replace(/:/g, '')}`;
 

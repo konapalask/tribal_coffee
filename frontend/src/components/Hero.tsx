@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { TRIBAL_PRODUCTS, type RealProduct, API_BASE_URL } from '../services/db';
 import FloatingCoffeeBean from './FloatingCoffeeBean';
+import { usePerformance } from '../hooks/usePerformance';
 
 interface HeroProps {
   onAddToBag: (product: RealProduct) => void;
@@ -10,6 +11,7 @@ interface HeroProps {
 }
 
 export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
+  const { isLowEnd } = usePerformance();
   const [activeIndex, setActiveIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   
@@ -17,6 +19,8 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
   const [tiltStyle, setTiltStyle] = useState({ transform: 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)' });
   const [glowOffset, setGlowOffset] = useState({ x: 0, y: 0 });
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  
+  const lastMouseMoveRef = useRef(0);
 
 
   // Circular offset function to determine 3D positions of the 5 products
@@ -92,6 +96,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
 
   // 3D Card Hover Rotation Effect - optimized with translate3d
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isLowEnd) return;
     const card = e.currentTarget;
     const box = card.getBoundingClientRect();
     const x = e.clientX - box.left - box.width / 2;
@@ -112,6 +117,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
   };
 
   const handleMouseLeave = () => {
+    if (isLowEnd) return;
     setTiltStyle({
       transform: 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1) translate3d(0, 0, 0)'
     });
@@ -120,6 +126,13 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
 
   // Section-wide mouse tracker for parallax coffee beans
   const handleSectionMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (isLowEnd) return;
+    
+    // Throttle state updates to a maximum of 25 FPS (every 40ms) to eliminate paint bottleneck
+    const now = Date.now();
+    if (now - lastMouseMoveRef.current < 40) return;
+    lastMouseMoveRef.current = now;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left - rect.width / 2;
     const y = e.clientY - rect.top - rect.height / 2;
@@ -174,7 +187,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
         <div 
           className="absolute inset-0 bg-cover bg-center transition-all duration-1000 opacity-20 mix-blend-overlay"
           style={{ 
-            backgroundImage: `url('/images/luxury_coffee_hero_bg.webp')`,
+            backgroundImage: `url('${API_BASE_URL}/images/luxury_coffee_hero_bg.opt.webp')`,
           }}
         />
 
@@ -227,7 +240,6 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
 
       {/* 3. DYNAMIC PARALLAX FLOATING COFFEE BEANS - Multi-layered 3D depth-of-field focus */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-        {/* === LAYER 1: FOREGROUND BEANS (6 instances) === */}
         <FloatingCoffeeBean
           size={90}
           mobileSize={60}
@@ -237,71 +249,9 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           parallaxFactor={-0.06}
           rotation={35}
           animationDelay="0s"
-          animationDuration="12s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={100}
-          mobileSize={65}
-          top="60%"
-          right="-4%"
-          depth="foreground"
-          parallaxFactor={-0.08}
-          rotation={-45}
-          animationDelay="2s"
-          animationDuration="14s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={75}
-          mobileSize={50}
-          top="8%"
-          left="35%"
-          depth="foreground"
-          parallaxFactor={-0.05}
-          rotation={15}
-          animationDelay="4s"
-          animationDuration="10s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={85}
-          mobileSize={55}
-          top="15%"
-          left="-3%"
-          depth="foreground"
-          parallaxFactor={-0.07}
-          rotation={-25}
-          animationDelay="1.5s"
-          animationDuration="13s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={95}
-          mobileSize={62}
-          top="92%"
-          right="8%"
-          depth="foreground"
-          parallaxFactor={-0.075}
-          rotation={65}
-          animationDelay="3s"
           animationDuration="15s"
           mousePos={mousePos}
         />
-        <FloatingCoffeeBean
-          size={80}
-          mobileSize={52}
-          top="5%"
-          right="20%"
-          depth="foreground"
-          parallaxFactor={-0.055}
-          rotation={-15}
-          animationDelay="5s"
-          animationDuration="11s"
-          mousePos={mousePos}
-        />
-
-        {/* === LAYER 2: MIDGROUND BEANS (6 instances) === */}
         <FloatingCoffeeBean
           size={60}
           mobileSize={40}
@@ -311,71 +261,9 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           parallaxFactor={-0.04}
           rotation={75}
           animationDelay="1s"
-          animationDuration="13s"
+          animationDuration="18s"
           mousePos={mousePos}
         />
-        <FloatingCoffeeBean
-          size={64}
-          mobileSize={42}
-          top="20%"
-          right="12%"
-          depth="midground"
-          parallaxFactor={-0.03}
-          rotation={-20}
-          animationDelay="3s"
-          animationDuration="15s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={55}
-          mobileSize={35}
-          top="85%"
-          left="48%"
-          depth="midground"
-          parallaxFactor={-0.045}
-          rotation={110}
-          animationDelay="5s"
-          animationDuration="11s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={58}
-          mobileSize={38}
-          top="72%"
-          right="15%"
-          depth="midground"
-          parallaxFactor={-0.035}
-          rotation={210}
-          animationDelay="0.5s"
-          animationDuration="16s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={62}
-          mobileSize={40}
-          top="10%"
-          left="22%"
-          depth="midground"
-          parallaxFactor={-0.045}
-          rotation={-130}
-          animationDelay="2.2s"
-          animationDuration="14s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={56}
-          mobileSize={36}
-          top="32%"
-          right="35%"
-          depth="midground"
-          parallaxFactor={-0.035}
-          rotation={85}
-          animationDelay="4.1s"
-          animationDuration="12s"
-          mousePos={mousePos}
-        />
-
-        {/* === LAYER 3: BACKGROUND BEANS (6 instances) === */}
         <FloatingCoffeeBean
           size={40}
           mobileSize={25}
@@ -384,68 +272,8 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           depth="background"
           parallaxFactor={-0.015}
           rotation={12}
-          animationDelay="6s"
-          animationDuration="18s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={36}
-          mobileSize={22}
-          top="12%"
-          left="55%"
-          depth="background"
-          parallaxFactor={-0.01}
-          rotation={-60}
-          animationDelay="1.5s"
-          animationDuration="17s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={42}
-          mobileSize={28}
-          top="45%"
-          right="28%"
-          depth="background"
-          parallaxFactor={-0.02}
-          rotation={155}
-          animationDelay="4.5s"
-          animationDuration="19s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={45}
-          mobileSize={30}
-          top="28%"
-          left="8%"
-          depth="background"
-          parallaxFactor={-0.022}
-          rotation={-30}
-          animationDelay="0.5s"
-          animationDuration="16.5s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={38}
-          mobileSize={24}
-          top="82%"
-          right="22%"
-          depth="background"
-          parallaxFactor={-0.015}
-          rotation={65}
-          animationDelay="2.5s"
-          animationDuration="18.2s"
-          mousePos={mousePos}
-        />
-        <FloatingCoffeeBean
-          size={48}
-          mobileSize={32}
-          top="62%"
-          left="52%"
-          depth="background"
-          parallaxFactor={-0.025}
-          rotation={-125}
-          animationDelay="4.2s"
-          animationDuration="17.5s"
+          animationDelay="3s"
+          animationDuration="22s"
           mousePos={mousePos}
         />
       </div>
