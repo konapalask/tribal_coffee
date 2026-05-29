@@ -47,19 +47,53 @@ export default function Testimonials() {
       <div className="absolute top-1/4 right-12 w-2 h-2 gold-dust-particle" style={{ animationDelay: '1s', opacity: 0.12 }} />
       <div className="absolute bottom-1/3 left-12 w-3.5 h-3.5 gold-dust-particle" style={{ animationDelay: '4s', opacity: 0.18 }} />
 
-      {/* Atmospheric Floating Coffee Beans (1) */}
+      {/* Atmospheric Floating Coffee Beans (4) */}
       <FloatingCoffeeBean
         size={72}
         mobileSize={46}
         top="8%"
-        left="4%"
+        left="5%"
         depth="midground"
         rotation={15}
         animationDelay="2s"
         animationDuration="15s"
+        seed={2}
+      />
+      <FloatingCoffeeBean
+        size={82}
+        mobileSize={54}
+        top="78%"
+        right="28%"
+        depth="foreground"
+        rotation={105}
+        animationDelay="0s"
+        animationDuration="16s"
+        seed={4}
+      />
+      <FloatingCoffeeBean
+        size={45}
+        mobileSize={28}
+        top="32%"
+        right="48%"
+        depth="background"
+        rotation={-30}
+        animationDelay="3.5s"
+        animationDuration="22s"
+        seed={5}
+      />
+      <FloatingCoffeeBean
+        size={58}
+        mobileSize={36}
+        top="62%"
+        left="32%"
+        depth="midground"
+        rotation={65}
+        animationDelay="1.5s"
+        animationDuration="18s"
+        seed={1}
       />
 
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
+      <div className="max-w-[1650px] mx-auto px-6 md:px-12 relative z-10">
         
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-20">

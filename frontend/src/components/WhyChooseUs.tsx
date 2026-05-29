@@ -48,7 +48,7 @@ export default function WhyChooseUs() {
       <div className="absolute bottom-1/3 left-1/3 w-3 h-3 gold-dust-particle" style={{ animationDelay: '6s', opacity: 0.18 }} />
       <div className="absolute bottom-10 right-1/4 w-2.5 h-2.5 gold-dust-particle" style={{ animationDelay: '2s', opacity: 0.12 }} />
 
-      {/* Atmospheric Floating Coffee Beans (1) */}
+      {/* Atmospheric Floating Coffee Beans (4) */}
       <FloatingCoffeeBean
         size={65}
         mobileSize={40}
@@ -58,9 +58,43 @@ export default function WhyChooseUs() {
         rotation={-20}
         animationDelay="1.5s"
         animationDuration="15s"
+        seed={1}
+      />
+      <FloatingCoffeeBean
+        size={75}
+        mobileSize={48}
+        top="75%"
+        right="28%"
+        depth="midground"
+        rotation={50}
+        animationDelay="0.5s"
+        animationDuration="18s"
+        seed={3}
+      />
+      <FloatingCoffeeBean
+        size={80}
+        mobileSize={50}
+        top="35%"
+        right="52%"
+        depth="foreground"
+        rotation={95}
+        animationDelay="3s"
+        animationDuration="16s"
+        seed={6}
+      />
+      <FloatingCoffeeBean
+        size={52}
+        mobileSize={32}
+        top="60%"
+        left="36%"
+        depth="midground"
+        rotation={-45}
+        animationDelay="2s"
+        animationDuration="20s"
+        seed={4}
       />
 
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
+      <div className="max-w-[1650px] mx-auto px-6 md:px-12 relative z-10">
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-20">

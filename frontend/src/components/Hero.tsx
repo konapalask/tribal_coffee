@@ -14,13 +14,23 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
   const { isLowEnd } = usePerformance();
   const [activeIndex, setActiveIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleResize = () => {
+        setIsMobile(window.innerWidth < 768);
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
   
   // Real-time mouse tilt properties
   const [tiltStyle, setTiltStyle] = useState({ transform: 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)' });
   const [glowOffset, setGlowOffset] = useState({ x: 0, y: 0 });
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  
-  const lastMouseMoveRef = useRef(0);
+  const mousePos = { x: 0, y: 0 };
 
 
   // Circular offset function to determine 3D positions of the 5 products
@@ -124,24 +134,13 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
     setGlowOffset({ x: 0, y: 0 });
   };
 
-  // Section-wide mouse tracker for parallax coffee beans
-  const handleSectionMouseMove = (e: React.MouseEvent<HTMLElement>) => {
-    if (isLowEnd) return;
-    
-    // Throttle state updates to a maximum of 25 FPS (every 40ms) to eliminate paint bottleneck
-    const now = Date.now();
-    if (now - lastMouseMoveRef.current < 40) return;
-    lastMouseMoveRef.current = now;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
-    setMousePos({ x, y });
+  // Section-wide mouse tracker for parallax coffee beans - completely bypassed since floating beans are disabled
+  const handleSectionMouseMove = (_e: React.MouseEvent<HTMLElement>) => {
+    return;
   };
 
   const handleSectionMouseLeave = () => {
     setIsHovered(false);
-    setMousePos({ x: 0, y: 0 });
   };
 
   return (
@@ -150,8 +149,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={handleSectionMouseLeave}
       onMouseMove={handleSectionMouseMove}
-      className="relative min-h-screen w-full flex flex-col justify-center overflow-hidden pt-20 md:pt-24 pb-16 transition-colors duration-1000 ease-in-out z-10"
-      style={{ background: '#111111' }}
+      className="relative min-h-screen w-full flex flex-col justify-center overflow-hidden pt-20 md:pt-24 pb-16 transition-colors duration-1000 ease-in-out z-10 bg-gradient-hero-to-shop"
     >
       {/* GPU-Composited Custom keyframes to animate coffee beans and smoke on the GPU thread with 0% CPU cost */}
       <style dangerouslySetInnerHTML={{__html: `
@@ -201,9 +199,9 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
 
         {/* Layer C: Premium Warm Backing Amber Light behind the active product */}
         <div 
-          className="absolute inset-0 transition-all duration-1000 opacity-50 mix-blend-color-dodge animate-pulse-slow"
+          className="absolute inset-0 transition-all duration-1000 opacity-60 animate-pulse-slow pointer-events-none"
           style={{
-            background: `radial-gradient(circle at 50% 45%, rgba(200, 169, 126, 0.45) 0%, transparent 60%)`,
+            background: `radial-gradient(circle at 50% 45%, rgba(200, 169, 126, 0.15) 0%, transparent 60%)`,
           }}
         />
 
@@ -251,35 +249,78 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           animationDelay="0s"
           animationDuration="15s"
           mousePos={mousePos}
+          seed={1}
         />
         <FloatingCoffeeBean
           size={60}
           mobileSize={40}
           top="16%"
-          left="10%"
+          left="26%"
           depth="midground"
           parallaxFactor={-0.04}
           rotation={75}
           animationDelay="1s"
           animationDuration="18s"
           mousePos={mousePos}
+          seed={2}
         />
         <FloatingCoffeeBean
           size={40}
           mobileSize={25}
           top="50%"
-          left="20%"
+          left="42%"
           depth="background"
           parallaxFactor={-0.015}
           rotation={12}
           animationDelay="3s"
           animationDuration="22s"
           mousePos={mousePos}
+          seed={3}
+        />
+        {/* Right column balanced floating beans */}
+        <FloatingCoffeeBean
+          size={70}
+          mobileSize={45}
+          top="22%"
+          right="15%"
+          depth="midground"
+          parallaxFactor={-0.035}
+          rotation={125}
+          animationDelay="1.5s"
+          animationDuration="20s"
+          mousePos={mousePos}
+          seed={4}
+        />
+        <FloatingCoffeeBean
+          size={45}
+          mobileSize={30}
+          top="68%"
+          right="35%"
+          depth="background"
+          parallaxFactor={-0.02}
+          rotation={45}
+          animationDelay="4.5s"
+          animationDuration="24s"
+          mousePos={mousePos}
+          seed={5}
+        />
+        <FloatingCoffeeBean
+          size={80}
+          mobileSize={50}
+          top="85%"
+          left="62%"
+          depth="foreground"
+          parallaxFactor={-0.05}
+          rotation={90}
+          animationDelay="2.5s"
+          animationDuration="16s"
+          mousePos={mousePos}
+          seed={6}
         />
       </div>
 
       {/* 4. MAIN SPLIT CONTENT GRID CONTAINER */}
-      <div className="w-full max-w-[1400px] mx-auto px-6 md:px-12 flex flex-col md:grid md:grid-cols-[0.95fr_1.05fr] gap-12 md:gap-8 items-center justify-center flex-grow z-10 relative">
+      <div className="w-full max-w-[1650px] mx-auto px-6 md:px-12 flex flex-col md:grid md:grid-cols-[0.95fr_1.05fr] gap-12 md:gap-8 items-center justify-center flex-grow z-10 relative">
         
         {/* LEFT COLUMN: Product information & navigation selector */}
         <div className="order-2 md:order-1 text-left flex flex-col justify-center min-h-[340px] md:min-h-[450px] w-full">
@@ -390,7 +431,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           {/* Floating Left Navigation Button */}
           <button
             onClick={prevSlide}
-            className="absolute -left-6 md:-left-16 lg:-left-24 top-1/2 -translate-y-1/2 z-40 p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
+            className="absolute left-2 md:-left-16 lg:-left-24 top-1/2 -translate-y-1/2 z-40 p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
             aria-label="Previous Product"
           >
             <ArrowLeft size={20} className="stroke-[2] group-hover:-translate-x-0.5 transition-transform duration-300" />
@@ -405,27 +446,31 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
               const isRight = offset === 1;
 
               // Strict percentage spacing rules: LEFT BACK: 22%, LEFT SIDE: 34%, CENTER: 50%, RIGHT SIDE: 66%, RIGHT BACK: 78%
-              const leftPos = offset === -2 
-                ? "22%" 
-                : offset === -1 
-                  ? "34%" 
-                  : offset === 0 
-                    ? "50%" 
-                    : offset === 1 
-                      ? "66%" 
-                      : "78%";
+              const leftPos = isMobile
+                ? "50%"
+                : offset === -2 
+                  ? "22%" 
+                  : offset === -1 
+                    ? "34%" 
+                    : offset === 0 
+                      ? "50%" 
+                      : offset === 1 
+                        ? "66%" 
+                        : "78%";
 
               const scaleVal = isActive 
-                ? 1.15 
+                ? (isMobile ? 1.0 : 1.15) 
                 : Math.abs(offset) === 1 
                   ? 0.82 
                   : 0.60;
 
               const opacityVal = isActive 
                 ? 1.0 
-                : Math.abs(offset) === 1 
-                  ? 0.7 
-                  : 0.25;
+                : isMobile
+                  ? 0.0 // Completely hide non-active offset cards on mobile to prevent ugly horizontal overflow!
+                  : Math.abs(offset) === 1 
+                    ? 0.7 
+                    : 0.25;
 
               const zIndexVal = isActive 
                 ? 40 
@@ -482,7 +527,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
                     }
                   }}
                   id={`carousel-card-${product.id}`}
-                  className="absolute flex flex-col items-center justify-center w-[280px] h-[360px] md:w-[380px] md:h-[520px] lg:w-[500px] lg:h-[680px] cursor-pointer select-none"
+                  className="absolute flex flex-col items-center justify-center w-[250px] h-[330px] sm:w-[280px] sm:h-[360px] md:w-[380px] md:h-[520px] lg:w-[500px] lg:h-[680px] cursor-pointer select-none"
                 >
                   {/* Gold Ambient Backing Light - shifting dynamically in opposite parallax direction */}
                   {isActive && (
@@ -517,7 +562,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
                     }}
                   >
                     {/* Uniform Aspect-Locked Product Package Image Container */}
-                    <div className="w-[280px] h-[360px] md:w-[380px] md:h-[500px] lg:w-[520px] lg:h-[650px] flex items-center justify-center relative overflow-visible">
+                    <div className="w-[250px] h-[330px] sm:w-[280px] sm:h-[360px] md:w-[380px] md:h-[500px] lg:w-[520px] lg:h-[650px] flex items-center justify-center relative overflow-visible">
                       <img
                         src={product.image.startsWith('http') ? product.image : `${API_BASE_URL}${product.image}`}
                         alt={product.name}
@@ -545,7 +590,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           {/* Floating Right Navigation Button */}
           <button
             onClick={nextSlide}
-            className="absolute -right-6 md:-right-16 lg:-right-24 top-1/2 -translate-y-1/2 z-40 p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
+            className="absolute right-2 md:-right-16 lg:-right-24 top-1/2 -translate-y-1/2 z-40 p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
             aria-label="Next Product"
           >
             <ArrowRight size={20} className="stroke-[2] group-hover:translate-x-0.5 transition-transform duration-300" />

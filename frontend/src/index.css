@@ -25,6 +25,36 @@
   50% { transform: translate3d(0, -15px, 0) rotate(2deg); }
 }
 
+@keyframes float-seed-1 {
+  0%, 100% { transform: translate3d(0, 0px, 0) rotate(0deg); }
+  50% { transform: translate3d(0, -12px, 0) rotate(3deg); }
+}
+
+@keyframes float-seed-2 {
+  0%, 100% { transform: translate3d(0, 0px, 0) rotate(0deg); }
+  50% { transform: translate3d(-8px, -16px, 0) rotate(-2deg); }
+}
+
+@keyframes float-seed-3 {
+  0%, 100% { transform: translate3d(0, 0px, 0) rotate(0deg); }
+  50% { transform: translate3d(6px, -18px, 0) rotate(-4deg); }
+}
+
+@keyframes float-seed-4 {
+  0%, 100% { transform: translate3d(0, 0px, 0) rotate(0deg); }
+  50% { transform: translate3d(-5px, -10px, 0) rotate(4deg); }
+}
+
+@keyframes float-seed-5 {
+  0%, 100% { transform: translate3d(0, 0px, 0) rotate(0deg); }
+  50% { transform: translate3d(8px, -14px, 0) rotate(-3deg); }
+}
+
+@keyframes float-seed-6 {
+  0%, 100% { transform: translate3d(0, 0px, 0) rotate(0deg); }
+  50% { transform: translate3d(-7px, -12px, 0) rotate(5deg); }
+}
+
 @keyframes smoke {
   0% {
     transform: translateY(10%) scale(0.9) rotate(0deg);
@@ -135,11 +165,10 @@ html, body {
   bottom: 0;
   width: 100px;
   height: 300px;
-  background: radial-gradient(ellipse at bottom, rgba(231, 216, 201, 0.15), transparent 60%);
-  filter: blur(20px);
-  mix-blend-mode: screen;
+  background: radial-gradient(ellipse at bottom, rgba(231, 216, 201, 0.06) 0%, rgba(231, 216, 201, 0.02) 40%, transparent 70%);
   pointer-events: none;
   animation: smoke 12s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 /* Glow Effect for mouse follow */
@@ -164,7 +193,7 @@ html, body {
 }
 
 .bg-gradient-shop {
-  background: linear-gradient(to bottom, #1A120D 0%, #0F0B08 100%);
+  background: linear-gradient(to bottom, #0a0705 0%, #1A120D 50%, #0F0B08 100%);
 }
 
 .bg-gradient-about {

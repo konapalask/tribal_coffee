@@ -21,7 +21,7 @@ export default function AboutSection() {
       <div className="absolute bottom-1/3 right-10 w-3 h-3 gold-dust-particle" style={{ animationDelay: '5s', opacity: 0.15 }} />
       <div className="absolute bottom-10 left-1/4 w-2.5 h-2.5 gold-dust-particle" style={{ animationDelay: '1s', opacity: 0.1 }} />
 
-      {/* Atmospheric Floating Coffee Beans (1) */}
+      {/* Atmospheric Floating Coffee Beans (4) */}
       <FloatingCoffeeBean
         size={75}
         mobileSize={48}
@@ -31,9 +31,43 @@ export default function AboutSection() {
         rotation={45}
         animationDelay="2s"
         animationDuration="15s"
+        seed={3}
+      />
+      <FloatingCoffeeBean
+        size={60}
+        mobileSize={38}
+        top="82%"
+        right="28%"
+        depth="background"
+        rotation={-15}
+        animationDelay="1s"
+        animationDuration="14s"
+        seed={1}
+      />
+      <FloatingCoffeeBean
+        size={85}
+        mobileSize={55}
+        top="30%"
+        right="45%"
+        depth="foreground"
+        rotation={85}
+        animationDelay="4s"
+        animationDuration="18s"
+        seed={5}
+      />
+      <FloatingCoffeeBean
+        size={50}
+        mobileSize={30}
+        top="65%"
+        left="32%"
+        depth="midground"
+        rotation={120}
+        animationDelay="0s"
+        animationDuration="21s"
+        seed={2}
       />
 
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
+      <div className="max-w-[1650px] mx-auto px-6 md:px-12 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center">
           
           {/* Left Column: Image with interactive reveal & hover lift */}

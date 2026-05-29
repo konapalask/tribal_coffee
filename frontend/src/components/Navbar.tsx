@@ -28,46 +28,56 @@ export default function Navbar({ onCartToggle, cartCount = 2, onAdminToggle, use
     }, 950);
   };
 
-  // Smooth scroll shrinking trigger
+  // Smooth scroll styling trigger & ultra-precise mathematical section active tracking (RAF throttled)
   useEffect(() => {
+    const sections = ['home', 'shop', 'about', 'collections', 'contact'];
+    let ticking = false;
+
     const handleScroll = () => {
+      // 1. Shrunk navbar state
       if (window.scrollY > 20) {
         setIsScrolled(true);
       } else {
         setIsScrolled(false);
       }
-    };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Premium Section Intersection Observer to automatically highlight active section pill on scroll
-  useEffect(() => {
-    const sections = ['home', 'shop', 'about', 'collections', 'contact'];
-    const observerOptions = {
-      root: null,
-      rootMargin: '-40% 0px -40% 0px',
-      threshold: 0,
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      // Ignore intermediate scroll triggers when actively executing a navigation link click
+      // 2. Active Section Highlighting
       if (isClickingNavRef.current) return;
 
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          setActiveSection(entry.target.id);
-        }
-      });
-    }, observerOptions);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const scrollPosition = window.scrollY + 180; // Offset for optical navbar/focus line
+          const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100;
 
-    sections.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
+          if (isAtBottom) {
+            setActiveSection('contact');
+          } else if (window.scrollY < 80) {
+            setActiveSection('home');
+          } else {
+            for (const id of sections) {
+              const el = document.getElementById(id);
+              if (el) {
+                const top = el.offsetTop;
+                const height = el.offsetHeight;
 
-    return () => observer.disconnect();
+                if (scrollPosition >= top && scrollPosition < top + height) {
+                  setActiveSection(id);
+                  break;
+                }
+              }
+            }
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    // Initial evaluation
+    handleScroll();
+
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   return (

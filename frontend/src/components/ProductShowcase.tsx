@@ -45,19 +45,53 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
       <div className="absolute bottom-10 left-1/3 w-2.5 h-2.5 gold-dust-particle" style={{ animationDelay: '2s', opacity: 0.1 }} />
       <div className="absolute bottom-1/4 right-10 w-3 h-3 gold-dust-particle" style={{ animationDelay: '7s', opacity: 0.18 }} />
 
-      {/* Atmospheric Floating Coffee Beans (1) */}
+      {/* Atmospheric Floating Coffee Beans (4) */}
       <FloatingCoffeeBean
         size={70}
         mobileSize={45}
         top="8%"
-        left="4%"
+        left="6%"
         depth="midground"
         rotation={25}
         animationDelay="1s"
         animationDuration="15s"
+        seed={2}
+      />
+      <FloatingCoffeeBean
+        size={58}
+        mobileSize={36}
+        top="82%"
+        right="22%"
+        depth="midground"
+        rotation={-65}
+        animationDelay="2.5s"
+        animationDuration="17s"
+        seed={4}
+      />
+      <FloatingCoffeeBean
+        size={42}
+        mobileSize={25}
+        top="38%"
+        left="35%"
+        depth="background"
+        rotation={110}
+        animationDelay="5s"
+        animationDuration="22s"
+        seed={1}
+      />
+      <FloatingCoffeeBean
+        size={80}
+        mobileSize={50}
+        top="65%"
+        right="48%"
+        depth="foreground"
+        rotation={45}
+        animationDelay="3s"
+        animationDuration="14s"
+        seed={6}
       />
 
-      <div className="max-w-[1400px] mx-auto px-6 md:px-12 relative z-10">
+      <div className="max-w-[1650px] mx-auto px-6 md:px-12 relative z-10">
         
         {/* SECTION HEADER */}
         <div className="text-center md:text-left mb-16 md:mb-20 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -78,7 +112,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
         {/* PRODUCTS GRID */}
         <div 
           id="product-showcase-grid"
-          className="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-8"
+          className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fit,minmax(360px,1fr))] gap-8"
         >
           {TRIBAL_PRODUCTS.map((product, idx) => (
             <motion.div

@@ -45,5 +45,24 @@
       }
     ],
     "amount": 449
+  },
+  {
+    "id": "TRB-9844",
+    "date": "29/5/2026",
+    "email": "nikhilmaddali147@gmail.com",
+    "customerName": "nikhil",
+    "city": "Vijayawada",
+    "pincode": "520008",
+    "items": [
+      {
+        "name": "Arabica Coffee Beans",
+        "quantity": 4,
+        "price": 449
+      }
+    ],
+    "amount": 1796,
+    "status": "Dispatched",
+    "courier": "Delhivery Prime - Express",
+    "awb": "SR70828489"
   }
 ]

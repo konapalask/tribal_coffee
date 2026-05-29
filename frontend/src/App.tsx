@@ -46,21 +46,36 @@ export default function App() {
   }, [loggedInUser]);
 
   // Real-time Connoisseur Wishlist State
-  const [wishlist, setWishlist] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('tribal_coffee_wishlist');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
+  const [wishlist, setWishlist] = useState<string[]>([]);
 
+  // Effect to load the wishlist whenever the loggedInUser changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('tribal_coffee_wishlist', JSON.stringify(wishlist));
+      const storageKey = loggedInUser 
+        ? `tribal_coffee_wishlist_${loggedInUser.id || loggedInUser.email || loggedInUser.username}`
+        : 'tribal_coffee_wishlist_guest';
+      
+      const saved = localStorage.getItem(storageKey);
+      setWishlist(saved ? JSON.parse(saved) : []);
     }
-  }, [wishlist]);
+  }, [loggedInUser]);
+
+  // Effect to save the wishlist whenever it or the loggedInUser changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storageKey = loggedInUser 
+        ? `tribal_coffee_wishlist_${loggedInUser.id || loggedInUser.email || loggedInUser.username}`
+        : 'tribal_coffee_wishlist_guest';
+      
+      localStorage.setItem(storageKey, JSON.stringify(wishlist));
+    }
+  }, [wishlist, loggedInUser]);
 
   const toggleWishlist = (id: string) => {
+    if (!loggedInUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setWishlist(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
