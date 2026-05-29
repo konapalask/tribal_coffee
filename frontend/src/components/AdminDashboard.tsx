@@ -23,6 +23,7 @@ interface ShipmentOrder {
   status: 'Pending' | 'Ready to Ship' | 'Dispatched' | 'Delivered';
   awb?: string;
   courier?: string;
+  date?: string;
 }
 
 interface ChatMessage {
@@ -114,9 +115,75 @@ interface AdminUser {
 
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
 
+  // --- Real-time Dynamic Analytics Calculations ---
+  const totalRevenue = shipments.reduce((sum, s) => sum + (s.amount || 0), 0);
+  const totalOrders = shipments.length;
+  const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  const activeShipmentsCount = shipments.filter(s => s.status === 'Pending' || s.status === 'Ready to Ship').length;
+
+  // Monthly Sales performance (Jan to Jun viewport matching UI axes)
+  const monthlyRevenue = Array(12).fill(0);
+  shipments.forEach(s => {
+    if (s.date) {
+      const slashParts = s.date.split('/');
+      let month = -1;
+      if (slashParts.length >= 2) {
+        month = parseInt(slashParts[1], 10) - 1;
+      } else {
+        const dashParts = s.date.split('-');
+        if (dashParts.length >= 2) {
+          month = parseInt(dashParts[1], 10) - 1;
+        }
+      }
+      if (month >= 0 && month < 12) {
+        monthlyRevenue[month] += s.amount || 0;
+      }
+    }
+  });
+
+  const getLineChartPaths = () => {
+    const displayedMonths = monthlyRevenue.slice(0, 6);
+    const maxRev = Math.max(...displayedMonths, 1000);
+    const points = displayedMonths.map((rev, idx) => {
+      const x = idx * 120;
+      const y = 220 - ((rev / maxRev) * 180);
+      return { x, y };
+    });
+    const linePath = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+    const areaPath = `${linePath} L 600,240 L 0,240 Z`;
+    return { linePath, areaPath };
+  };
+
+  const { linePath, areaPath } = getLineChartPaths();
+
+  // Coffee Category Sales breakdown for Donut Chart
+  let beansQty = 0;
+  let powderQty = 0;
+  let specialtyQty = 0;
+  shipments.forEach(s => {
+    const prodName = (s.productName || '').toLowerCase();
+    const qtyMatch = prodName.match(/x(\d+)/g) || [];
+    let qty = 1;
+    if (qtyMatch.length > 0) {
+      qty = qtyMatch.reduce((sum, m) => sum + parseInt(m.replace('x', ''), 10), 0);
+    }
+    if (prodName.includes('beans')) {
+      beansQty += qty;
+    } else if (prodName.includes('powder') || prodName.includes('filter')) {
+      powderQty += qty;
+    } else {
+      specialtyQty += qty;
+    }
+  });
+
+  const totalQty = beansQty + powderQty + specialtyQty;
+  const beansPercent = totalQty > 0 ? Math.round((beansQty / totalQty) * 100) : 0;
+  const powderPercent = totalQty > 0 ? Math.round((powderQty / totalQty) * 100) : 0;
+  const specialtyPercent = totalQty > 0 ? Math.round((specialtyQty / totalQty) * 100) : 0;
+
   // Synchronize Super Admin name in admins list with adminName
   useEffect(() => {
-    setAdmins(prev => prev.map(a => a.id === 'adm-1' ? { ...a, name: adminName, email: 'admin@tribalcoffee.in' } : a));
+    setAdmins(prev => prev.map(a => a.email.toLowerCase() === 'admin@tribalcoffee.in' ? { ...a, name: adminName } : a));
   }, [adminName]);
 
   useEffect(() => {
@@ -125,8 +192,23 @@ interface AdminUser {
         const res = await fetch(`${API_BASE_URL}/api/auth/users`);
         if (res.ok) {
           const data = await res.json();
-          setRegisteredUsers(data);
           
+          // Separate admins and customers dynamically
+          const adminsList = data.filter((u: any) => u.role === 'Super Admin' || u.role === 'Lounge Manager' || u.role === 'Dispatcher');
+          const customersList = data.filter((u: any) => u.role !== 'Super Admin' && u.role !== 'Lounge Manager' && u.role !== 'Dispatcher');
+          
+          setRegisteredUsers(customersList);
+          
+          if (adminsList.length > 0) {
+            setAdmins(adminsList.map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              email: a.email,
+              role: a.role,
+              status: 'Active'
+            })));
+          }
+
           // Dynamically sync active Super Admin name from backend JSON database
           const activeAdmin = data.find((u: any) => u.email.toLowerCase() === 'admin@tribalcoffee.in');
           if (activeAdmin) {
@@ -167,7 +249,8 @@ interface AdminUser {
             amount: b.amount || 0,
             status: b.status || 'Pending',
             awb: b.awb,
-            courier: b.courier
+            courier: b.courier,
+            date: b.date
           }));
           setShipments(mapped);
         }
@@ -427,40 +510,96 @@ interface AdminUser {
   };
 
   // Multi-Admin Invite Handler
-  const handleInviteAdmin = (e: React.FormEvent) => {
+  const handleInviteAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteName || !inviteEmail) return;
 
-    const newAdmin: AdminUser = {
-      id: `adm-${Date.now()}`,
-      name: inviteName,
-      email: inviteEmail,
-      role: inviteRole,
-      status: 'Pending'
-    };
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: inviteName,
+          email: inviteEmail,
+          password: 'password123', // Default passcode for newly invited administrative accounts
+          role: inviteRole
+        })
+      });
 
-    setAdmins(prev => [...prev, newAdmin]);
-    setInviteName('');
-    setInviteEmail('');
+      if (res.ok) {
+        // Fetch fresh users to update UI states
+        const fetchRes = await fetch(`${API_BASE_URL}/api/auth/users`);
+        if (fetchRes.ok) {
+          const data = await fetchRes.json();
+          const adminsList = data.filter((u: any) => u.role === 'Super Admin' || u.role === 'Lounge Manager' || u.role === 'Dispatcher');
+          const customersList = data.filter((u: any) => u.role !== 'Super Admin' && u.role !== 'Lounge Manager' && u.role !== 'Dispatcher');
+          
+          setAdmins(adminsList.map((a: any) => ({
+            id: a.id,
+            name: a.name,
+            email: a.email,
+            role: a.role,
+            status: 'Active'
+          })));
+          setRegisteredUsers(customersList);
+        }
+        setIsInviteModalOpen(false);
+        setInviteName('');
+        setInviteEmail('');
+      } else {
+        const errorData = await res.json();
+        alert(errorData.message || 'Failed to authorize administrative profile in backend database.');
+      }
+    } catch (err) {
+      console.error('Failed to authorize/invite admin:', err);
+      alert('Network failure connecting to administrative security vault.');
+    }
   };
 
   // Sync active sidebar adminName with Multi-Admin admins database
   useEffect(() => {
-    setAdmins(prev => prev.map(a => {
-      if (a.id === 'adm-1') {
-        return { ...a, name: adminName };
-      }
-      return a;
-    }));
+    setAdmins(prev => prev.map(a => a.email.toLowerCase() === 'admin@tribalcoffee.in' ? { ...a, name: adminName } : a));
   }, [adminName]);
 
-  const handleDeleteAdmin = (id: string) => {
-    if (id === 'adm-1') {
-      alert(`You cannot revoke Super Admin ${adminName}!`);
+  const handleDeleteAdmin = async (id: string) => {
+    const targetAdmin = admins.find(a => a.id === id);
+    if (!targetAdmin) return;
+    
+    if (targetAdmin.email.toLowerCase() === 'admin@tribalcoffee.in') {
+      alert(`You cannot revoke Super Admin ${targetAdmin.name}!`);
       return;
     }
-    if (confirm('Are you sure you want to revoke this admin access?')) {
-      setAdmins(prev => prev.filter(a => a.id !== id));
+
+    if (confirm(`Are you sure you want to revoke administrative access for ${targetAdmin.name}?`)) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/users/${id}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          // Fetch fresh users to update UI states
+          const fetchRes = await fetch(`${API_BASE_URL}/api/auth/users`);
+          if (fetchRes.ok) {
+            const data = await fetchRes.json();
+            const adminsList = data.filter((u: any) => u.role === 'Super Admin' || u.role === 'Lounge Manager' || u.role === 'Dispatcher');
+            const customersList = data.filter((u: any) => u.role !== 'Super Admin' && u.role !== 'Lounge Manager' && u.role !== 'Dispatcher');
+            
+            setAdmins(adminsList.map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              email: a.email,
+              role: a.role,
+              status: 'Active'
+            })));
+            setRegisteredUsers(customersList);
+          }
+        } else {
+          const errorData = await res.json();
+          alert(errorData.message || 'Failed to delete administrative access in backend database.');
+        }
+      } catch (err) {
+        console.error('Failed to delete administrative access:', err);
+        alert('Network failure connecting to administrative security vault.');
+      }
     }
   };
   const filteredProducts = productsList.filter(prod => {
@@ -761,9 +900,9 @@ interface AdminUser {
                     <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-warm-gold/5 -z-10" />
                       <span className="text-[10px] font-sans text-warm-gold uppercase tracking-[0.2em] font-bold block mb-1">Total Revenue</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">₹0.00</h3>
+                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">₹{totalRevenue.toLocaleString('en-IN')}</h3>
                       <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>No transactions yet</span>
+                        <span>Based on historical bookings</span>
                       </div>
                     </div>
 
@@ -771,9 +910,9 @@ interface AdminUser {
                     <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-bean/10 -z-10" />
                       <span className="text-[10px] font-sans text-cream-latte/50 uppercase tracking-[0.2em] font-bold block mb-1">Total Orders</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">0 Sales</h3>
+                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">{totalOrders} Sales</h3>
                       <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>No orders yet</span>
+                        <span>Orders logged in system</span>
                       </div>
                     </div>
 
@@ -781,9 +920,9 @@ interface AdminUser {
                     <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-warm-gold/5 -z-10" />
                       <span className="text-[10px] font-sans text-warm-gold uppercase tracking-[0.2em] font-bold block mb-1">Average Order</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">₹0.00</h3>
+                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">₹{Math.round(averageOrderValue)}</h3>
                       <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>Steady customer retention</span>
+                        <span>Average ticket size per order</span>
                       </div>
                     </div>
 
@@ -791,9 +930,9 @@ interface AdminUser {
                     <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-emerald-500/5 -z-10" />
                       <span className="text-[10px] font-sans text-cream-latte/50 uppercase tracking-[0.2em] font-bold block mb-1">Active Shipments</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">0 Active</h3>
+                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">{activeShipmentsCount} Active</h3>
                       <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>Waiting for orders</span>
+                        <span>Awaiting dispatch actions</span>
                       </div>
                     </div>
                   </div>
@@ -829,13 +968,13 @@ interface AdminUser {
                             
                             {/* SVG Path Area */}
                             <path
-                              d="M0,240 L0,220 L600,220 L600,240 Z"
+                              d={areaPath}
                               fill="url(#chartGrad)"
                             />
 
                             {/* SVG Line path */}
                             <path
-                              d="M0,220 L600,220"
+                              d={linePath}
                               fill="none"
                               stroke="rgba(214,178,122,0.3)"
                               strokeWidth="2.5"
@@ -845,8 +984,8 @@ interface AdminUser {
 
                           {/* Chart Tooltip Overlay */}
                           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-espresso/95 border border-warm-gold/20 p-4 rounded-2xl text-[10px] font-sans uppercase tracking-[0.2em] text-center shadow-2xl backdrop-blur-md">
-                            <span className="text-warm-gold block font-bold mb-1">Awaiting Orders</span>
-                            <span className="text-cream-latte/50 block font-normal text-[8px] tracking-wide normal-case mt-1">No monthly transactions logged</span>
+                            <span className="text-warm-gold block font-bold mb-1">Peak Sales (May)</span>
+                            <span className="text-cream-latte/50 block font-normal text-[8px] tracking-wide normal-case mt-1">May sales logged: ₹{monthlyRevenue[4].toLocaleString('en-IN')}</span>
                           </div>
                         </div>                      </div>
 
@@ -869,36 +1008,82 @@ interface AdminUser {
                           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                             {/* Empty Track */}
                             <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(214,178,122,0.08)" strokeWidth="8" />
+                            
+                            {/* Beans Segment */}
+                            {beansPercent > 0 && (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill="none"
+                                stroke="#D6B27A"
+                                strokeWidth="8"
+                                strokeDasharray={`${(beansPercent / 100) * 251.2} 251.2`}
+                                strokeDashoffset="0"
+                              />
+                            )}
+                            
+                            {/* Powder Segment */}
+                            {powderPercent > 0 && (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill="none"
+                                stroke="#8B5E3C"
+                                strokeWidth="8"
+                                strokeDasharray={`${(powderPercent / 100) * 251.2} 251.2`}
+                                strokeDashoffset={-((beansPercent / 100) * 251.2)}
+                              />
+                            )}
+                            
+                            {/* Specialty Segment */}
+                            {specialtyPercent > 0 && (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill="none"
+                                stroke="#4A2B1D"
+                                strokeWidth="8"
+                                strokeDasharray={`${(specialtyPercent / 100) * 251.2} 251.2`}
+                                strokeDashoffset={-(((beansPercent + powderPercent) / 100) * 251.2)}
+                              />
+                            )}
                           </svg>
                           <div className="absolute text-center px-4">
-                            <span className="font-playfair font-bold text-xl text-[#F8E8D2] block">0%</span>
-                            <span className="text-[7px] font-sans text-cream-latte/45 tracking-wider uppercase block leading-tight">No Sales Yet</span>
+                            <span className="font-playfair font-bold text-xl text-[#F8E8D2] block">
+                              {totalOrders > 0 ? `${beansPercent}%` : '0%'}
+                            </span>
+                            <span className="text-[7px] font-sans text-cream-latte/45 tracking-wider uppercase block leading-tight">
+                              {totalOrders > 0 ? 'Araku Beans dominant' : 'No Sales Yet'}
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       {/* Donut Legend */}
                       <div className="flex flex-col gap-2 font-sans text-[10px] uppercase tracking-widest font-bold text-cream-latte/50">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between text-cream-latte">
                           <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-warm-gold/20" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-warm-gold" />
                             <span>Araku Beans</span>
                           </div>
-                          <span>0%</span>
+                          <span>{beansPercent}%</span>
                         </div>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between text-cream-latte">
                           <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#8B5E3C]/20" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#8B5E3C]" />
                             <span>Fine/Coarse Powder</span>
                           </div>
-                          <span>0%</span>
+                          <span>{powderPercent}%</span>
                         </div>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between text-cream-latte">
                           <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#4A2B1D]/20" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#4A2B1D]" />
                             <span>Cold Brew / Special</span>
                           </div>
-                          <span>0%</span>
+                          <span>{specialtyPercent}%</span>
                         </div>
                       </div>
                     </div>                  </div>
@@ -1413,19 +1598,32 @@ interface AdminUser {
                             <th className="pb-3">Initials</th>
                             <th className="pb-3">Name</th>
                             <th className="pb-3">Email Address</th>
+                            <th className="pb-3">Contact Number</th>
+                            <th className="pb-3">Physical Address</th>
                             <th className="pb-3">Account ID</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-warm-gold/5 text-cream-latte/85">
                           {registeredUsers.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="py-6 text-center text-cream-latte/30 font-medium italic">
+                              <td colSpan={6} className="py-6 text-center text-cream-latte/30 font-medium italic">
                                 No registered connoisseur profiles logged in yet.
                               </td>
                             </tr>
                           ) : (
                             registeredUsers.map((user) => {
                               const initials = user.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'C';
+                              
+                              // Format mixed address field (supporting custom JSON objects or pure address strings)
+                              let formattedAddress = 'No address recorded';
+                              if (user.address) {
+                                if (typeof user.address === 'object') {
+                                  formattedAddress = `${user.address.doorNo || ''}, ${user.address.area || ''}, ${user.address.city || ''} - ${user.address.pinCode || ''}`.replace(/^,\s*|,\s*$/, '').trim();
+                                } else {
+                                  formattedAddress = user.address;
+                                }
+                              }
+
                               return (
                                 <tr key={user.id || user.email} className="hover:bg-cream-latte/[0.02] transition-colors">
                                   <td className="py-4">
@@ -1435,6 +1633,8 @@ interface AdminUser {
                                   </td>
                                   <td className="py-4 font-bold font-playfair">{user.name}</td>
                                   <td className="py-4 font-mono text-cream-latte/65">{user.email}</td>
+                                  <td className="py-4 font-mono text-cream-latte/75">{user.phone || <span className="text-cream-latte/30">N/A</span>}</td>
+                                  <td className="py-4 text-cream-latte/65 max-w-[250px] truncate" title={formattedAddress}>{formattedAddress}</td>
                                   <td className="py-4 text-cream-latte/40 text-[10px] uppercase font-mono">{user.id || 'N/A'}</td>
                                 </tr>
                               );

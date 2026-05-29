@@ -4,6 +4,9 @@ import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+import mongoose from 'mongoose';
+import { User, Product, Booking } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,339 +28,80 @@ const DATA_FILE_PATH = path.join(__dirname, 'data', 'products.json');
 const USERS_FILE_PATH = path.join(__dirname, 'data', 'users.json');
 const BOOKINGS_FILE_PATH = path.join(__dirname, 'data', 'bookings.json');
 
-// Helper functions for reading/writing persistent product data
-const readProducts = () => {
-  try {
-    if (!fs.existsSync(DATA_FILE_PATH)) {
-      return [];
-    }
-    const rawData = fs.readFileSync(DATA_FILE_PATH, 'utf8');
-    return JSON.parse(rawData);
-  } catch (err) {
-    console.error('Error reading database file:', err);
-    return [];
-  }
-};
-
-const writeProducts = (products) => {
-  try {
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(products, null, 2), 'utf8');
-    return true;
-  } catch (err) {
-    console.error('Error writing to database file:', err);
-    return false;
-  }
-};
-
-const readUsers = () => {
-  try {
-    let users = [];
-    if (fs.existsSync(USERS_FILE_PATH)) {
-      const rawData = fs.readFileSync(USERS_FILE_PATH, 'utf8');
-      users = JSON.parse(rawData);
-    }
-    // Seed Super Admin if not already present
-    if (!users.some(u => u.email.toLowerCase() === 'admin@tribalcoffee.in')) {
-      users.push({
-        id: 'adm-1',
-        name: 'Sharmila K',
-        email: 'admin@tribalcoffee.in',
-        password: 'password123',
-        role: 'Super Admin'
-      });
-      fs.writeFileSync(USERS_FILE_PATH, JSON.stringify(users, null, 2), 'utf8');
-    }
-    return users;
-  } catch (err) {
-    console.error('Error reading users file:', err);
-    return [];
-  }
-};
-
-const writeUsers = (users) => {
-  try {
-    fs.writeFileSync(USERS_FILE_PATH, JSON.stringify(users, null, 2), 'utf8');
-    return true;
-  } catch (err) {
-    console.error('Error writing to users file:', err);
-    return false;
-  }
-};
-
-const readBookings = () => {
-  try {
-    if (!fs.existsSync(BOOKINGS_FILE_PATH)) {
-      return [];
-    }
-    const rawData = fs.readFileSync(BOOKINGS_FILE_PATH, 'utf8');
-    return JSON.parse(rawData);
-  } catch (err) {
-    console.error('Error reading bookings file:', err);
-    return [];
-  }
-};
-
-const writeBookings = (bookings) => {
-  try {
-    fs.writeFileSync(BOOKINGS_FILE_PATH, JSON.stringify(bookings, null, 2), 'utf8');
-    return true;
-  } catch (err) {
-    console.error('Error writing to bookings file:', err);
-    return false;
-  }
-};
-
-// ----------------- API ROUTES -----------------
-
-// 1. Auth Endpoint: Admin & User Login
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-
-  // Load latest users list from file
-  const users = readUsers();
-
-  // Super admin check dynamically loaded from persistent database
-  const adminUser = users.find(u => u.email.toLowerCase() === 'admin@tribalcoffee.in');
-  if (email.toLowerCase() === 'admin@tribalcoffee.in' && password === (adminUser ? adminUser.password : 'password123')) {
-    return res.json({
-      success: true,
-      user: {
-        id: adminUser ? adminUser.id : 'adm-1',
-        name: adminUser ? adminUser.name : 'Sharmila K',
-        email: 'admin@tribalcoffee.in',
-        role: 'Super Admin'
-      },
-      token: 'secure-token-tribal-lounge-2026'
-    });
-  }
-
-  // Regular user authentication check
-  const matchedUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-  if (!matchedUser) {
-    return res.status(404).json({
-      success: false,
-      message: 'This connoisseur profile does not exist. Please register first.'
-    });
-  }
-
-  if (matchedUser.password !== password) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication rejected. Invalid password credentials.'
-    });
-  }
-
-  return res.json({
-    success: true,
-    user: {
-      name: matchedUser.name,
-      email: matchedUser.email,
-      role: 'Connoisseur',
-      address: matchedUser.address
-    }
-  });
-});
-
-// 1b. Auth Endpoint: User Registration
-app.post('/api/auth/register', (req, res) => {
-  const { name, email, password } = req.body;
-
-  if (!name || !email || !password) {
-    return res.status(400).json({ success: false, message: 'Please complete all fields.' });
-  }
-
-  const users = readUsers();
-  const userExists = users.some(u => u.email.toLowerCase() === email.toLowerCase());
-
-  if (userExists) {
-    return res.status(409).json({ success: false, message: 'This email is not available.' });
-  }
-
-  const newUser = { id: `user-${Date.now()}`, name, email, password };
-  users.push(newUser);
-  const success = writeUsers(users);
-
-  if (success) {
-    res.status(201).json({
-      success: true,
-      user: { name, email, role: 'Connoisseur', address: null }
-    });
-  } else {
-    res.status(500).json({ success: false, message: 'Failed to write profile to files.' });
-  }
-});
-
-// 1c. Get Registered Users list for Admin
-app.get('/api/auth/users', (req, res) => {
-  const users = readUsers();
-  res.json(users);
-});
-
-// 1f. Update user profile name and address
-app.put('/api/auth/users/update', (req, res) => {
-  const { email, name, address } = req.body;
-  if (!email) {
-    return res.status(400).json({ success: false, message: 'Email is required.' });
-  }
-
-  const users = readUsers();
-  const index = users.findIndex(u => u.email.toLowerCase() === email.toLowerCase());
-
-  if (index === -1) {
-    return res.status(404).json({ success: false, message: 'User not found in archives.' });
-  }
-
-  if (name) users[index].name = name;
-  if (address) users[index].address = address;
-  const success = writeUsers(users);
-
-  if (success) {
-    const isSuperAdmin = users[index].email.toLowerCase() === 'admin@tribalcoffee.in';
-    res.json({
-      success: true,
-      user: {
-        name: users[index].name,
-        email: users[index].email,
-        role: isSuperAdmin ? 'Super Admin' : 'Connoisseur',
-        address: users[index].address
-      }
-    });
-  } else {
-    res.status(500).json({ success: false, message: 'Failed to update user profile.' });
-  }
-});
-
-// 1d. Create Booking/Order History
-app.post('/api/bookings', (req, res) => {
-  const booking = req.body;
-  if (!booking.email || !booking.items) {
-    return res.status(400).json({ success: false, message: 'Invalid booking data.' });
-  }
-
-  const bookings = readBookings();
-  const newBooking = {
-    id: `TRB-${Math.floor(1000 + Math.random() * 9000)}`,
-    date: new Date().toLocaleDateString('en-IN'),
-    ...booking
-  };
-
-  bookings.push(newBooking);
-  const success = writeBookings(bookings);
-
-  if (success) {
-    res.status(201).json({ success: true, booking: newBooking });
-  } else {
-    res.status(500).json({ success: false, message: 'Failed to record booking history.' });
-  }
-});
-
-// 1e. Get Booking History
-app.get('/api/bookings', (req, res) => {
-  const bookings = readBookings();
-  res.json(bookings);
-});
-
-// 1g. Update Booking status to Dispatched
-app.put('/api/bookings/:id/dispatch', (req, res) => {
-  const { id } = req.params;
-  const { courier, awb } = req.body;
-
-  const bookings = readBookings();
-  const index = bookings.findIndex(b => b.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ success: false, message: 'Booking not found.' });
-  }
-
-  bookings[index].status = 'Dispatched';
-  bookings[index].courier = courier || 'Delhivery Express';
-  bookings[index].awb = awb || `SR${Math.floor(10000000 + Math.random() * 90000000)}`;
-
-  const success = writeBookings(bookings);
-
-  if (success) {
-    res.json({ success: true, booking: bookings[index] });
-  } else {
-    res.status(500).json({ success: false, message: 'Failed to update dispatch status.' });
-  }
-});
-
-// 2. Fetch all products
-app.get('/api/products', (req, res) => {
-  const products = readProducts();
-  res.json(products);
-});
-
-// 3. Add a new product
-app.post('/api/products', (req, res) => {
-  const newProduct = req.body;
+// --- Multi-Hash Password Verification Helpers ---
+function verifyWordPressPassword(password, hash) {
+  if (!hash.startsWith('$P$') && !hash.startsWith('$H$')) return false;
   
-  if (!newProduct.id || !newProduct.name || !newProduct.price) {
-    return res.status(400).json({ success: false, message: 'Invalid product specifications.' });
+  const itoa64 = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  const countLog2 = itoa64.indexOf(hash[3]);
+  if (countLog2 < 7 || countLog2 > 30) return false;
+  
+  const count = 1 << countLog2;
+  const salt = hash.substring(4, 12);
+  
+  let currentHash = crypto.createHash('md5').update(salt + password).digest();
+  for (let i = 0; i < count; i++) {
+    currentHash = crypto.createHash('md5').update(Buffer.concat([currentHash, Buffer.from(password)])).digest();
+  }
+  
+  function encode64(input, count) {
+    let output = '';
+    let i = 0;
+    while (i < count) {
+      let value = input[i++];
+      output += itoa64[value & 0x3f];
+      if (i < count) value |= input[i] << 8;
+      output += itoa64[(value >> 6) & 0x3f];
+      if (i >= count) break;
+      i++;
+      if (i < count) value |= input[i] << 16;
+      output += itoa64[(value >> 12) & 0x3f];
+      if (i >= count) break;
+      i++;
+      output += itoa64[(value >> 18) & 0x3f];
+    }
+    return output;
+  }
+  
+  const encodedHash = hash.substring(0, 12) + encode64(currentHash, currentHash.length);
+  return encodedHash === hash;
+}
+
+function verifyOpenCartPassword(password, hash, salt) {
+  if (!salt) return false;
+  const hash1 = crypto.createHash('sha1').update(password).digest('hex');
+  const hash2 = crypto.createHash('sha1').update(salt + hash1).digest('hex');
+  const hash3 = crypto.createHash('sha1').update(salt + hash2).digest('hex');
+  if (hash3 === hash) return true;
+
+  const altHash2 = crypto.createHash('sha1').update(salt + hash1).digest('hex');
+  if (altHash2 === hash) return true;
+
+  const sha1Plain = crypto.createHash('sha1').update(password).digest('hex');
+  if (sha1Plain === hash) return true;
+
+  const sha1Salt = crypto.createHash('sha1').update(salt + password).digest('hex');
+  if (sha1Salt === hash) return true;
+
+  return false;
+}
+
+function verifyPassword(inputPassword, storedPassword, salt) {
+  if (!storedPassword) return false;
+  if (inputPassword === storedPassword) return true;
+
+  if (storedPassword.startsWith('$P$') || storedPassword.startsWith('$H$')) {
+    return verifyWordPressPassword(inputPassword, storedPassword);
   }
 
-  const products = readProducts();
-  // Double check ID uniqueness
-  if (products.some(p => p.id === newProduct.id)) {
-    return res.status(409).json({ success: false, message: 'Product ID already exists in our archives.' });
+  if (storedPassword.length === 40 && /^[0-9a-fA-F]+$/.test(storedPassword)) {
+    return verifyOpenCartPassword(inputPassword, storedPassword, salt);
   }
 
-  products.push(newProduct);
-  const success = writeProducts(products);
+  return false;
+}
 
-  if (success) {
-    res.status(201).json({ success: true, products });
-  } else {
-    res.status(500).json({ success: false, message: 'Failed to write product to files.' });
-  }
-});
-
-// 4. Update an existing product
-app.put('/api/products/:id', (req, res) => {
-  const { id } = req.params;
-  const updatedProduct = req.body;
-
-  const products = readProducts();
-  const index = products.findIndex(p => p.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ success: false, message: 'Product not found in our archives.' });
-  }
-
-  // Preserve ID
-  products[index] = { ...updatedProduct, id };
-  const success = writeProducts(products);
-
-  if (success) {
-    res.json({ success: true, products });
-  } else {
-    res.status(500).json({ success: false, message: 'Failed to update product file.' });
-  }
-});
-
-// 5. Delete a product
-app.delete('/api/products/:id', (req, res) => {
-  const { id } = req.params;
-
-  const products = readProducts();
-  const index = products.findIndex(p => p.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ success: false, message: 'Product not found in our archives.' });
-  }
-
-  products.splice(index, 1);
-  const success = writeProducts(products);
-
-  if (success) {
-    res.json({ success: true, products });
-  } else {
-    res.status(500).json({ success: false, message: 'Failed to delete product from archives.' });
-  }
-});
-
-// DEFAULT PRODUCTS SEED DATA FOR FACTORY RESET
+// DEFAULT PRODUCTS SEED DATA FOR FACTORY RESET & SEEDING
 const DEFAULT_PRODUCTS = [
   {
     "id": "just-arabica-beans",
@@ -457,12 +201,375 @@ const DEFAULT_PRODUCTS = [
   }
 ];
 
+// --- MongoDB Automated Seeding Helper ---
+const seedDatabase = async () => {
+  try {
+    // 1. Seed Users
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      console.log('User collection is empty. Checking for JSON data to seed...');
+      if (fs.existsSync(USERS_FILE_PATH)) {
+        const rawUsers = JSON.parse(fs.readFileSync(USERS_FILE_PATH, 'utf8'));
+        if (rawUsers.length > 0) {
+          console.log(`Seeding ${rawUsers.length} users from users.json to MongoDB...`);
+          await User.insertMany(rawUsers);
+          console.log('User seeding successful!');
+        }
+      } else {
+        // Seed default admin if no users file exists
+        console.log('Seeding default Super Admin user...');
+        await User.create({
+          id: 'adm-1',
+          name: 'Sharmila K',
+          email: 'admin@tribalcoffee.in',
+          password: 'password123',
+          role: 'Super Admin'
+        });
+      }
+    }
+
+    // 2. Seed Bookings
+    const bookingCount = await Booking.countDocuments();
+    if (bookingCount === 0) {
+      console.log('Booking collection is empty. Checking for JSON data to seed...');
+      if (fs.existsSync(BOOKINGS_FILE_PATH)) {
+        const rawBookings = JSON.parse(fs.readFileSync(BOOKINGS_FILE_PATH, 'utf8'));
+        if (rawBookings.length > 0) {
+          console.log(`Seeding ${rawBookings.length} bookings from bookings.json to MongoDB...`);
+          await Booking.insertMany(rawBookings);
+          console.log('Booking seeding successful!');
+        }
+      }
+    }
+
+    // 3. Seed Products
+    const productCount = await Product.countDocuments();
+    if (productCount === 0) {
+      console.log('Product collection is empty. Seeding defaults...');
+      let seedProds = DEFAULT_PRODUCTS;
+      if (fs.existsSync(DATA_FILE_PATH)) {
+        const fileProds = JSON.parse(fs.readFileSync(DATA_FILE_PATH, 'utf8'));
+        if (fileProds.length > 0) {
+          seedProds = fileProds;
+        }
+      }
+      console.log(`Seeding ${seedProds.length} products to MongoDB...`);
+      await Product.insertMany(seedProds);
+      console.log('Product seeding successful!');
+    }
+  } catch (err) {
+    console.error('Error seeding database:', err);
+  }
+};
+
+// --- MONGODB CONNECTION ---
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/tribal_coffee';
+mongoose.connect(MONGODB_URI)
+  .then(async () => {
+    console.log('====================================================');
+    console.log('>>> SUCCESS: Connected to MongoDB database successfully!');
+    console.log('====================================================');
+    await seedDatabase();
+  })
+  .catch((err) => {
+    console.error('====================================================');
+    console.error('>>> ERROR: Failed to connect to MongoDB database:', err);
+    console.error('====================================================');
+  });
+
+// ----------------- API ROUTES -----------------
+
+// 1. Auth Endpoint: Admin & User Login
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const emailLower = email.toLowerCase().trim();
+    const user = await User.findOne({ email: emailLower });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'This connoisseur profile does not exist. Please register first.'
+      });
+    }
+
+    if (!verifyPassword(password, user.password, user.salt)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication rejected. Invalid password credentials.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        address: user.address
+      },
+      token: 'secure-token-tribal-lounge-2026'
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    return res.status(500).json({ success: false, message: 'Login query execution failed' });
+  }
+});
+
+// 1b. Auth Endpoint: User Registration
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, password, role } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ success: false, message: 'Please complete all fields.' });
+  }
+
+  try {
+    const emailLower = email.toLowerCase().trim();
+    const userExists = await User.findOne({ email: emailLower });
+
+    if (userExists) {
+      return res.status(409).json({ success: false, message: 'This email is not available.' });
+    }
+
+    const assignedRole = role || 'Connoisseur';
+    const newUser = new User({
+      id: `user-${Date.now()}`,
+      name,
+      email: emailLower,
+      password,
+      role: assignedRole
+    });
+    
+    await newUser.save();
+    res.status(201).json({
+      success: true,
+      user: { name, email: emailLower, role: assignedRole, address: null }
+    });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ success: false, message: 'Failed to record profile.' });
+  }
+});
+
+// 1h. Revoke Admin / User Access
+app.delete('/api/auth/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await User.findOne({ id });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found in archives.' });
+    }
+    if (user.email.toLowerCase() === 'admin@tribalcoffee.in') {
+      return res.status(403).json({ success: false, message: 'Cannot revoke core Super Admin privileges.' });
+    }
+    await User.deleteOne({ id });
+    res.json({ success: true, message: 'Administrative access or user account successfully revoked.' });
+  } catch (err) {
+    console.error('Revoke access error:', err);
+    res.status(500).json({ success: false, message: 'Failed to revoke access from database.' });
+  }
+});
+
+// 1c. Get Registered Users list for Admin
+app.get('/api/auth/users', async (req, res) => {
+  try {
+    const users = await User.find({});
+    res.json(users);
+  } catch (err) {
+    console.error('Fetch users error:', err);
+    res.status(500).json({ success: false, message: 'Failed to query users' });
+  }
+});
+
+// 1f. Update user profile name and address
+app.put('/api/auth/users/update', async (req, res) => {
+  const { email, name, address } = req.body;
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'Email is required.' });
+  }
+
+  try {
+    const emailLower = email.toLowerCase().trim();
+    const user = await User.findOne({ email: emailLower });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found in archives.' });
+    }
+
+    if (name) user.name = name;
+    if (address !== undefined) user.address = address;
+    await user.save();
+
+    res.json({
+      success: true,
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        address: user.address
+      }
+    });
+  } catch (err) {
+    console.error('Update user profile error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update user profile.' });
+  }
+});
+
+// 1d. Create Booking/Order History
+app.post('/api/bookings', async (req, res) => {
+  const booking = req.body;
+  if (!booking.email || !booking.items) {
+    return res.status(400).json({ success: false, message: 'Invalid booking data.' });
+  }
+
+  try {
+    const newBooking = new Booking({
+      id: `TRB-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: new Date().toLocaleDateString('en-IN'),
+      email: booking.email.toLowerCase().trim(),
+      customerName: booking.customerName || 'Connoisseur',
+      city: booking.city,
+      pincode: booking.pincode,
+      items: booking.items,
+      amount: booking.amount,
+      status: booking.status || 'Pending',
+      courier: booking.courier,
+      awb: booking.awb
+    });
+
+    await newBooking.save();
+    res.status(201).json({ success: true, booking: newBooking });
+  } catch (err) {
+    console.error('Create booking error:', err);
+    res.status(500).json({ success: false, message: 'Failed to record booking history.' });
+  }
+});
+
+// 1e. Get Booking History
+app.get('/api/bookings', async (req, res) => {
+  try {
+    const bookings = await Booking.find({});
+    res.json(bookings);
+  } catch (err) {
+    console.error('Fetch bookings error:', err);
+    res.status(500).json({ success: false, message: 'Failed to load bookings' });
+  }
+});
+
+// 1g. Update Booking status to Dispatched
+app.put('/api/bookings/:id/dispatch', async (req, res) => {
+  const { id } = req.params;
+  const { courier, awb } = req.body;
+
+  try {
+    const booking = await Booking.findOne({ id });
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    booking.status = 'Dispatched';
+    booking.courier = courier || 'Delhivery Express';
+    booking.awb = awb || `SR${Math.floor(10000000 + Math.random() * 90000000)}`;
+    await booking.save();
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    console.error('Dispatch booking error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update dispatch status.' });
+  }
+});
+
+// 2. Fetch all products
+app.get('/api/products', async (req, res) => {
+  try {
+    const products = await Product.find({});
+    res.json(products);
+  } catch (err) {
+    console.error('Fetch products error:', err);
+    res.status(500).json({ success: false, message: 'Failed to query product inventory.' });
+  }
+});
+
+// 3. Add a new product
+app.post('/api/products', async (req, res) => {
+  const newProduct = req.body;
+  
+  if (!newProduct.id || !newProduct.name || !newProduct.price) {
+    return res.status(400).json({ success: false, message: 'Invalid product specifications.' });
+  }
+
+  try {
+    const existing = await Product.findOne({ id: newProduct.id });
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'Product ID already exists in our archives.' });
+    }
+
+    const newProdDoc = new Product(newProduct);
+    await newProdDoc.save();
+
+    const products = await Product.find({});
+    res.status(201).json({ success: true, products });
+  } catch (err) {
+    console.error('Add product error:', err);
+    res.status(500).json({ success: false, message: 'Failed to write product.' });
+  }
+});
+
+// 4. Update an existing product
+app.put('/api/products/:id', async (req, res) => {
+  const { id } = req.params;
+  const updatedProduct = req.body;
+
+  try {
+    const product = await Product.findOne({ id });
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found in our archives.' });
+    }
+
+    Object.assign(product, updatedProduct);
+    product.id = id; // Keep ID invariant
+    await product.save();
+
+    const products = await Product.find({});
+    res.json({ success: true, products });
+  } catch (err) {
+    console.error('Update product error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update product.' });
+  }
+});
+
+// 5. Delete a product
+app.delete('/api/products/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const product = await Product.findOne({ id });
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found in our archives.' });
+    }
+
+    await Product.deleteOne({ id });
+    const products = await Product.find({});
+    res.json({ success: true, products });
+  } catch (err) {
+    console.error('Delete product error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete product.' });
+  }
+});
+
 // 6. Reset database to default seed products
-app.post('/api/products/reset', (req, res) => {
-  const success = writeProducts(DEFAULT_PRODUCTS);
-  if (success) {
+app.post('/api/products/reset', async (req, res) => {
+  try {
+    await Product.deleteMany({});
+    await Product.insertMany(DEFAULT_PRODUCTS);
     res.json({ success: true, products: DEFAULT_PRODUCTS });
-  } else {
+  } catch (err) {
+    console.error('Reset products error:', err);
     res.status(500).json({ success: false, message: 'Failed to reset product file.' });
   }
 });
@@ -472,7 +579,6 @@ app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`TRIBAL COFFEE LOUNGE BACKEND RUNNING ON PORT ${PORT}`);
   console.log(`Serving static images from public/`);
-  console.log(`JSON database active at: ${DATA_FILE_PATH}`);
+  console.log(`Serving dynamic persistence connected to MongoDB`);
   console.log(`====================================================`);
 });
-
