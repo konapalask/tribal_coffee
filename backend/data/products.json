@@ -22,7 +22,10 @@
     "description": "Certified organic, hand-selected Arabica whole beans grown at high altitudes of 1,200 meters by indigenous farmers in the volcanic soil of the Araku Valley. Roasted to medium-dark complexity in micro-batches to unleash an exceptionally low-acidity cup with a velvet, chocolatey finish.",
     "aromaDescription": "Intense and welcoming with sweet hints of brown sugar and warm toasted nuts, settling into a deep, earthy cacao bloom.",
     "bgGradient": "radial-gradient(circle at 50% 40%, rgba(43, 24, 16, 0.45) 0%, rgba(17, 17, 17, 1) 70%)",
-    "glowColor": "rgba(74, 44, 29, 0.45)"
+    "glowColor": "rgba(74, 44, 29, 0.45)",
+    "price750g": 808,
+    "size1Name": "450g",
+    "size2Name": "750g"
   },
   {
     "id": "just-arabica-fine-powder",

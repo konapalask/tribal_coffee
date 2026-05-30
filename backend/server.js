@@ -5,8 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import mongoose from 'mongoose';
-import { User, Product, Booking } from './db.js';
+import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +25,45 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const DATA_FILE_PATH = path.join(__dirname, 'data', 'products.json');
 const USERS_FILE_PATH = path.join(__dirname, 'data', 'users.json');
+const SPAM_USERS_FILE_PATH = path.join(__dirname, 'data', 'spam_users.json');
 const BOOKINGS_FILE_PATH = path.join(__dirname, 'data', 'bookings.json');
+const DELIVERY_PROVIDERS_FILE_PATH = path.join(__dirname, 'data', 'delivery_providers.json');
+
+// --- OTP Setup ---
+const otpStore = new Map();
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER || 'samuelnikhil147@gmail.com', // User's Gmail
+    pass: process.env.EMAIL_PASS || 'nikhilbahubali@qwe'         // User's App Password
+  }
+});
+// -----------------
+
+// --- Helper functions for JSON database operations ---
+function readJSONFile(filePath, defaultValue = []) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf8');
+      return defaultValue;
+    }
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(`Error reading ${filePath}:`, err);
+    return defaultValue;
+  }
+}
+
+function writeJSONFile(filePath, data) {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error(`Error writing ${filePath}:`, err);
+  }
+}
 
 // --- Multi-Hash Password Verification Helpers ---
 function verifyWordPressPassword(password, hash) {
@@ -116,6 +153,9 @@ const DEFAULT_PRODUCTS = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Sweet Caramel", "Roasted Almond", "Mild Citrus", "Smoky Oak"],
     "price": 449,
+    "price750g": 849,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "originalPrice": 499,
     "image": "/images/Arabica Coffee Beans.webp",
     "description": "Certified organic, hand-selected Arabica whole beans grown at high altitudes of 1,200 meters by indigenous farmers in the volcanic soil of the Araku Valley. Roasted to medium-dark complexity in micro-batches to unleash an exceptionally low-acidity cup with a velvet, chocolatey finish.",
@@ -136,6 +176,9 @@ const DEFAULT_PRODUCTS = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Cocoa Nibs", "Warm Nutmeg", "Floral Honey"],
     "price": 449,
+    "price750g": 849,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/Arabica Fine Ground Powder.webp",
     "description": "Freshly packed-to-order organic Arabica fine grinds, tailored specifically for high-pressure brewing methods like Espresso machines, Aeropress, or traditional stovetop Moka Pots. Offers a bright, balanced crema with intricate spice profiles.",
     "aromaDescription": "Bright floral top notes interwoven with a sweet, warming fragrance of natural nutmeg and wild mountain honey.",
@@ -155,6 +198,9 @@ const DEFAULT_PRODUCTS = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Dark Chocolate", "Smoked Mahogany", "Toasted Hazelnut"],
     "price": 449,
+    "price750g": 849,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/Arabica Coarse Ground Powder.webp",
     "description": "Organic Arabica beans ground to a coarse, uniform size to prevent over-extraction. Perfect for slow immersion coffee rituals including French Press, Cold Brew drippers, or siphon brewers. Brings out heavy-bodied cocoa depths.",
     "aromaDescription": "Robust, comforting woody aromas mixed with heavy dark cocoa solids and a whisper of slow smoky oak.",
@@ -174,6 +220,9 @@ const DEFAULT_PRODUCTS = [
     "chicory": "40% Chicory",
     "tastingNotes": ["Intense Cacao", "Chicory Sweetness", "Heavy Molasses"],
     "price": 299,
+    "price750g": 549,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/South Indian Filter Coffee Powder.webp",
     "description": "The definitive traditional South Indian filter coffee blend. Combining 60% high-altitude shade-grown Arabica and Robusta beans from Araku with 40% premium, slow-roasted French chicory. Delivers an incredibly thick, strong, and highly aromatic morning cup that pairs flawlessly with warm frothed milk.",
     "aromaDescription": "Pungent, highly concentrated and dark roasted with heavy caramel sugars, sweet malted chicory, and molasses.",
@@ -193,6 +242,9 @@ const DEFAULT_PRODUCTS = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Vanilla Pod", "Floral Jasmine", "Crisp Toffee"],
     "price": 399,
+    "price750g": 749,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/Arabica Cold Brew Concentrate.webp",
     "description": "Our signature cold-brewed nectar, slow-extracted over 24 hours in cold spring water from pure organic Araku Arabica beans. Yields an incredibly smooth, naturally sweet concentrate containing twice the caffeine kick of hot brew, with practically zero bitterness or acidity.",
     "aromaDescription": "Soft and delicate with undercurrents of fragrant night jasmine, vanilla bean pods, and light buttery toffee.",
@@ -201,90 +253,41 @@ const DEFAULT_PRODUCTS = [
   }
 ];
 
-// --- MongoDB Automated Seeding Helper ---
-const seedDatabase = async () => {
-  try {
-    // 1. Seed Users
-    const userCount = await User.countDocuments();
-    if (userCount === 0) {
-      console.log('User collection is empty. Checking for JSON data to seed...');
-      if (fs.existsSync(USERS_FILE_PATH)) {
-        const rawUsers = JSON.parse(fs.readFileSync(USERS_FILE_PATH, 'utf8'));
-        if (rawUsers.length > 0) {
-          console.log(`Seeding ${rawUsers.length} users from users.json to MongoDB...`);
-          await User.insertMany(rawUsers);
-          console.log('User seeding successful!');
-        }
-      } else {
-        // Seed default admin if no users file exists
-        console.log('Seeding default Super Admin user...');
-        await User.create({
-          id: 'adm-1',
-          name: 'Sharmila K',
-          email: 'admin@tribalcoffee.in',
-          password: 'password123',
-          role: 'Super Admin'
-        });
+// Initialize JSON files with seed data if they don't exist
+const initializeJSONDatabase = () => {
+  const users = readJSONFile(USERS_FILE_PATH, []);
+  if (users.length === 0) {
+    writeJSONFile(USERS_FILE_PATH, [
+      {
+        id: 'adm-1',
+        name: 'Sharmila K',
+        email: 'admin@tribalcoffee.in',
+        password: 'password123',
+        role: 'Super Admin'
       }
-    }
-
-    // 2. Seed Bookings
-    const bookingCount = await Booking.countDocuments();
-    if (bookingCount === 0) {
-      console.log('Booking collection is empty. Checking for JSON data to seed...');
-      if (fs.existsSync(BOOKINGS_FILE_PATH)) {
-        const rawBookings = JSON.parse(fs.readFileSync(BOOKINGS_FILE_PATH, 'utf8'));
-        if (rawBookings.length > 0) {
-          console.log(`Seeding ${rawBookings.length} bookings from bookings.json to MongoDB...`);
-          await Booking.insertMany(rawBookings);
-          console.log('Booking seeding successful!');
-        }
-      }
-    }
-
-    // 3. Seed Products
-    const productCount = await Product.countDocuments();
-    if (productCount === 0) {
-      console.log('Product collection is empty. Seeding defaults...');
-      let seedProds = DEFAULT_PRODUCTS;
-      if (fs.existsSync(DATA_FILE_PATH)) {
-        const fileProds = JSON.parse(fs.readFileSync(DATA_FILE_PATH, 'utf8'));
-        if (fileProds.length > 0) {
-          seedProds = fileProds;
-        }
-      }
-      console.log(`Seeding ${seedProds.length} products to MongoDB...`);
-      await Product.insertMany(seedProds);
-      console.log('Product seeding successful!');
-    }
-  } catch (err) {
-    console.error('Error seeding database:', err);
+    ]);
   }
+
+  const products = readJSONFile(DATA_FILE_PATH, []);
+  if (products.length === 0) {
+    writeJSONFile(DATA_FILE_PATH, DEFAULT_PRODUCTS);
+  }
+
+  readJSONFile(BOOKINGS_FILE_PATH, []);
+  console.log('>>> Local JSON Database initialized successfully!');
 };
 
-// --- MONGODB CONNECTION ---
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/tribal_coffee';
-mongoose.connect(MONGODB_URI)
-  .then(async () => {
-    console.log('====================================================');
-    console.log('>>> SUCCESS: Connected to MongoDB database successfully!');
-    console.log('====================================================');
-    await seedDatabase();
-  })
-  .catch((err) => {
-    console.error('====================================================');
-    console.error('>>> ERROR: Failed to connect to MongoDB database:', err);
-    console.error('====================================================');
-  });
+initializeJSONDatabase();
 
 // ----------------- API ROUTES -----------------
 
 // 1. Auth Endpoint: Admin & User Login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   try {
     const emailLower = email.toLowerCase().trim();
-    const user = await User.findOne({ email: emailLower });
+    const users = readJSONFile(USERS_FILE_PATH);
+    const user = users.find(u => u.email.toLowerCase().trim() === emailLower);
 
     if (!user) {
       return res.status(404).json({
@@ -318,8 +321,8 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // 1b. Auth Endpoint: User Registration
-app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, role } = req.body;
+app.post('/api/auth/register', (req, res) => {
+  const { name, email, password, role, phone, address } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ success: false, message: 'Please complete all fields.' });
@@ -327,25 +330,32 @@ app.post('/api/auth/register', async (req, res) => {
 
   try {
     const emailLower = email.toLowerCase().trim();
-    const userExists = await User.findOne({ email: emailLower });
+    const users = readJSONFile(USERS_FILE_PATH);
+    const userExists = users.some(u => u.email.toLowerCase().trim() === emailLower);
 
     if (userExists) {
       return res.status(409).json({ success: false, message: 'This email is not available.' });
     }
 
     const assignedRole = role || 'Connoisseur';
-    const newUser = new User({
+    const newUser = {
       id: `user-${Date.now()}`,
       name,
       email: emailLower,
-      password,
-      role: assignedRole
-    });
+      password, // In a robust app, we would hash this, but keeping it simplified/matching original logic
+      role: assignedRole,
+      phone: phone || null,
+      address: address || null,
+      emailVerified: false  // TODO: Set to true after Firebase email verification is integrated
+    };
     
-    await newUser.save();
+    users.push(newUser);
+    writeJSONFile(USERS_FILE_PATH, users);
+
     res.status(201).json({
       success: true,
-      user: { name, email: emailLower, role: assignedRole, address: null }
+      requiresVerification: true,  // TODO: Firebase will handle actual email sending
+      user: { name, email: emailLower, role: assignedRole, phone: newUser.phone, address: newUser.address, emailVerified: false }
     });
   } catch (err) {
     console.error('Registration error:', err);
@@ -353,18 +363,187 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// --- Custom Email OTP Endpoints for Hybrid Flow ---
+
+app.post('/api/auth/send-otp', (req, res) => {
+  const { email, type = 'register' } = req.body;
+  if (!email) return res.status(400).json({ success: false, message: 'Missing email.' });
+
+  const emailLower = email.toLowerCase().trim();
+  
+  const users = readJSONFile(USERS_FILE_PATH);
+  const existingUser = users.find(u => u.email.toLowerCase().trim() === emailLower);
+
+  if (type === 'register' && existingUser) {
+    return res.status(409).json({ success: false, message: 'This email is already registered. Please sign in instead.' });
+  }
+
+  if (type === 'reset' && !existingUser) {
+    return res.status(404).json({ success: false, message: 'No account found with this email address.' });
+  }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000;
+
+  otpStore.set(emailLower, { otp, expiresAt });
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER || 'samuelnikhil147@gmail.com',
+    to: emailLower,
+    subject: 'Tribal Coffee - Your Verification Code',
+    text: `Your Tribal Coffee verification code is: ${otp}\n\nThis code expires in 5 minutes.`
+  };
+
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error('Error sending OTP:', error);
+      console.log(`[DEV MODE] OTP for ${emailLower} is ${otp}`);
+      return res.status(200).json({ 
+        success: true, 
+        message: 'OTP sent (Dev mode: Check server console for code)',
+        devOtp: otp 
+      });
+    } else {
+      return res.status(200).json({ success: true, message: 'OTP sent successfully.' });
+    }
+  });
+});
+
+app.post('/api/auth/verify-otp', (req, res) => {
+  const { email, otp } = req.body;
+  
+  if (!email || !otp) {
+    return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const storedOtpData = otpStore.get(emailLower);
+
+  if (!storedOtpData || Date.now() > storedOtpData.expiresAt) {
+    if (storedOtpData) otpStore.delete(emailLower);
+    return res.status(400).json({ success: false, message: 'OTP expired or not requested.' });
+  }
+
+  if (storedOtpData.otp !== otp) {
+    return res.status(400).json({ success: false, message: 'Invalid OTP code.' });
+  }
+
+  otpStore.delete(emailLower);
+  return res.status(200).json({ success: true, message: 'OTP verified successfully.' });
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ success: false, message: 'Missing required fields.' });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const storedOtpData = otpStore.get(emailLower);
+
+  if (!storedOtpData || Date.now() > storedOtpData.expiresAt || storedOtpData.otp !== otp) {
+    if (storedOtpData && Date.now() > storedOtpData.expiresAt) otpStore.delete(emailLower);
+    return res.status(400).json({ success: false, message: 'Invalid or expired OTP code.' });
+  }
+
+  // OTP is valid
+  otpStore.delete(emailLower);
+
+  const users = readJSONFile(USERS_FILE_PATH);
+  const userIndex = users.findIndex(u => u.email.toLowerCase().trim() === emailLower);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ success: false, message: 'User not found in database.' });
+  }
+
+  users[userIndex].password = newPassword;
+  writeJSONFile(USERS_FILE_PATH, users);
+
+  return res.status(200).json({ success: true, message: 'Password reset successfully. You can now sign in.' });
+});
+
+app.post('/api/auth/register-profile', (req, res) => {
+  const { email, name, phone, address, password, dob, gender } = req.body;
+
+  try {
+    const emailLower = email.toLowerCase().trim();
+    const users = readJSONFile(USERS_FILE_PATH);
+    const existingUser = users.find(u => u.email.toLowerCase().trim() === emailLower);
+
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'User already exists in profile db.' });
+    }
+
+    const newUser = {
+      id: `user-${Date.now()}`,
+      name: name || emailLower.split('@')[0],
+      email: emailLower,
+      password: password || null,
+      role: 'Connoisseur',
+      phone: phone || null,
+      address: address || null,
+      dob: dob || null,
+      gender: gender || null,
+      emailVerified: true
+    };
+    
+    users.push(newUser);
+    writeJSONFile(USERS_FILE_PATH, users);
+
+    return res.status(201).json({
+      success: true,
+      user: newUser
+    });
+  } catch (err) {
+    console.error('Register profile error:', err);
+    res.status(500).json({ success: false, message: 'Failed to save profile.' });
+  }
+});
+
+app.post('/api/auth/get-profile', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ success: false, message: 'Email required' });
+
+  try {
+    const emailLower = email.toLowerCase().trim();
+    const users = readJSONFile(USERS_FILE_PATH);
+    const user = users.find(u => u.email.toLowerCase().trim() === emailLower);
+
+    if (user) {
+      if (!user.emailVerified) {
+        user.emailVerified = true;
+        writeJSONFile(USERS_FILE_PATH, users);
+      }
+      return res.status(200).json({ success: true, user });
+    }
+    
+    // If not found in our JSON but Firebase authenticated them, they might be an old user
+    return res.status(404).json({ success: false, message: 'Profile not found' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+
 // 1h. Revoke Admin / User Access
-app.delete('/api/auth/users/:id', async (req, res) => {
+app.delete('/api/auth/users/:id', (req, res) => {
   const { id } = req.params;
   try {
-    const user = await User.findOne({ id });
-    if (!user) {
+    const users = readJSONFile(USERS_FILE_PATH);
+    const userIndex = users.findIndex(u => u.id === id);
+
+    if (userIndex === -1) {
       return res.status(404).json({ success: false, message: 'User not found in archives.' });
     }
+
+    const user = users[userIndex];
     if (user.email.toLowerCase() === 'admin@tribalcoffee.in') {
       return res.status(403).json({ success: false, message: 'Cannot revoke core Super Admin privileges.' });
     }
-    await User.deleteOne({ id });
+
+    users.splice(userIndex, 1);
+    writeJSONFile(USERS_FILE_PATH, users);
+
     res.json({ success: true, message: 'Administrative access or user account successfully revoked.' });
   } catch (err) {
     console.error('Revoke access error:', err);
@@ -373,9 +552,9 @@ app.delete('/api/auth/users/:id', async (req, res) => {
 });
 
 // 1c. Get Registered Users list for Admin
-app.get('/api/auth/users', async (req, res) => {
+app.get('/api/auth/users', (req, res) => {
   try {
-    const users = await User.find({});
+    const users = readJSONFile(USERS_FILE_PATH);
     res.json(users);
   } catch (err) {
     console.error('Fetch users error:', err);
@@ -384,7 +563,7 @@ app.get('/api/auth/users', async (req, res) => {
 });
 
 // 1f. Update user profile name and address
-app.put('/api/auth/users/update', async (req, res) => {
+app.put('/api/auth/users/update', (req, res) => {
   const { email, name, address } = req.body;
   if (!email) {
     return res.status(400).json({ success: false, message: 'Email is required.' });
@@ -392,7 +571,8 @@ app.put('/api/auth/users/update', async (req, res) => {
 
   try {
     const emailLower = email.toLowerCase().trim();
-    const user = await User.findOne({ email: emailLower });
+    const users = readJSONFile(USERS_FILE_PATH);
+    const user = users.find(u => u.email.toLowerCase().trim() === emailLower);
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found in archives.' });
@@ -400,7 +580,8 @@ app.put('/api/auth/users/update', async (req, res) => {
 
     if (name) user.name = name;
     if (address !== undefined) user.address = address;
-    await user.save();
+    
+    writeJSONFile(USERS_FILE_PATH, users);
 
     res.json({
       success: true,
@@ -418,14 +599,15 @@ app.put('/api/auth/users/update', async (req, res) => {
 });
 
 // 1d. Create Booking/Order History
-app.post('/api/bookings', async (req, res) => {
+app.post('/api/bookings', (req, res) => {
   const booking = req.body;
   if (!booking.email || !booking.items) {
     return res.status(400).json({ success: false, message: 'Invalid booking data.' });
   }
 
   try {
-    const newBooking = new Booking({
+    const bookings = readJSONFile(BOOKINGS_FILE_PATH);
+    const newBooking = {
       id: `TRB-${Math.floor(1000 + Math.random() * 9000)}`,
       date: new Date().toLocaleDateString('en-IN'),
       email: booking.email.toLowerCase().trim(),
@@ -437,9 +619,11 @@ app.post('/api/bookings', async (req, res) => {
       status: booking.status || 'Pending',
       courier: booking.courier,
       awb: booking.awb
-    });
+    };
 
-    await newBooking.save();
+    bookings.push(newBooking);
+    writeJSONFile(BOOKINGS_FILE_PATH, bookings);
+
     res.status(201).json({ success: true, booking: newBooking });
   } catch (err) {
     console.error('Create booking error:', err);
@@ -448,9 +632,9 @@ app.post('/api/bookings', async (req, res) => {
 });
 
 // 1e. Get Booking History
-app.get('/api/bookings', async (req, res) => {
+app.get('/api/bookings', (req, res) => {
   try {
-    const bookings = await Booking.find({});
+    const bookings = readJSONFile(BOOKINGS_FILE_PATH);
     res.json(bookings);
   } catch (err) {
     console.error('Fetch bookings error:', err);
@@ -459,12 +643,13 @@ app.get('/api/bookings', async (req, res) => {
 });
 
 // 1g. Update Booking status to Dispatched
-app.put('/api/bookings/:id/dispatch', async (req, res) => {
+app.put('/api/bookings/:id/dispatch', (req, res) => {
   const { id } = req.params;
   const { courier, awb } = req.body;
 
   try {
-    const booking = await Booking.findOne({ id });
+    const bookings = readJSONFile(BOOKINGS_FILE_PATH);
+    const booking = bookings.find(b => b.id === id);
 
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found.' });
@@ -473,7 +658,8 @@ app.put('/api/bookings/:id/dispatch', async (req, res) => {
     booking.status = 'Dispatched';
     booking.courier = courier || 'Delhivery Express';
     booking.awb = awb || `SR${Math.floor(10000000 + Math.random() * 90000000)}`;
-    await booking.save();
+    
+    writeJSONFile(BOOKINGS_FILE_PATH, bookings);
 
     res.json({ success: true, booking });
   } catch (err) {
@@ -483,9 +669,9 @@ app.put('/api/bookings/:id/dispatch', async (req, res) => {
 });
 
 // 2. Fetch all products
-app.get('/api/products', async (req, res) => {
+app.get('/api/products', (req, res) => {
   try {
-    const products = await Product.find({});
+    const products = readJSONFile(DATA_FILE_PATH);
     res.json(products);
   } catch (err) {
     console.error('Fetch products error:', err);
@@ -494,7 +680,7 @@ app.get('/api/products', async (req, res) => {
 });
 
 // 3. Add a new product
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', (req, res) => {
   const newProduct = req.body;
   
   if (!newProduct.id || !newProduct.name || !newProduct.price) {
@@ -502,15 +688,15 @@ app.post('/api/products', async (req, res) => {
   }
 
   try {
-    const existing = await Product.findOne({ id: newProduct.id });
+    const products = readJSONFile(DATA_FILE_PATH);
+    const existing = products.find(p => p.id === newProduct.id);
     if (existing) {
       return res.status(409).json({ success: false, message: 'Product ID already exists in our archives.' });
     }
 
-    const newProdDoc = new Product(newProduct);
-    await newProdDoc.save();
+    products.push(newProduct);
+    writeJSONFile(DATA_FILE_PATH, products);
 
-    const products = await Product.find({});
     res.status(201).json({ success: true, products });
   } catch (err) {
     console.error('Add product error:', err);
@@ -519,12 +705,13 @@ app.post('/api/products', async (req, res) => {
 });
 
 // 4. Update an existing product
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', (req, res) => {
   const { id } = req.params;
   const updatedProduct = req.body;
 
   try {
-    const product = await Product.findOne({ id });
+    const products = readJSONFile(DATA_FILE_PATH);
+    const product = products.find(p => p.id === id);
 
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found in our archives.' });
@@ -532,9 +719,9 @@ app.put('/api/products/:id', async (req, res) => {
 
     Object.assign(product, updatedProduct);
     product.id = id; // Keep ID invariant
-    await product.save();
+    
+    writeJSONFile(DATA_FILE_PATH, products);
 
-    const products = await Product.find({});
     res.json({ success: true, products });
   } catch (err) {
     console.error('Update product error:', err);
@@ -543,18 +730,20 @@ app.put('/api/products/:id', async (req, res) => {
 });
 
 // 5. Delete a product
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', (req, res) => {
   const { id } = req.params;
 
   try {
-    const product = await Product.findOne({ id });
+    const products = readJSONFile(DATA_FILE_PATH);
+    const productIndex = products.findIndex(p => p.id === id);
 
-    if (!product) {
+    if (productIndex === -1) {
       return res.status(404).json({ success: false, message: 'Product not found in our archives.' });
     }
 
-    await Product.deleteOne({ id });
-    const products = await Product.find({});
+    products.splice(productIndex, 1);
+    writeJSONFile(DATA_FILE_PATH, products);
+
     res.json({ success: true, products });
   } catch (err) {
     console.error('Delete product error:', err);
@@ -563,14 +752,103 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 // 6. Reset database to default seed products
-app.post('/api/products/reset', async (req, res) => {
+app.post('/api/products/reset', (req, res) => {
   try {
-    await Product.deleteMany({});
-    await Product.insertMany(DEFAULT_PRODUCTS);
+    writeJSONFile(DATA_FILE_PATH, DEFAULT_PRODUCTS);
     res.json({ success: true, products: DEFAULT_PRODUCTS });
   } catch (err) {
     console.error('Reset products error:', err);
     res.status(500).json({ success: false, message: 'Failed to reset product file.' });
+  }
+});
+
+// ==========================================
+// Delivery Provider APIs
+// ==========================================
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'averysecretkey12345678901234567890'; // Should be 32 chars in production
+const IV_LENGTH = 16;
+
+function encrypt(text) {
+  if (!text) return text;
+  // Pad key if necessary for simple local dev
+  const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest('base64').substr(0, 32);
+  let iv = crypto.randomBytes(IV_LENGTH);
+  let cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
+  let encrypted = cipher.update(text);
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
+
+function decrypt(text) {
+  if (!text || !text.includes(':')) return text;
+  try {
+    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest('base64').substr(0, 32);
+    let textParts = text.split(':');
+    let iv = Buffer.from(textParts.shift(), 'hex');
+    let encryptedText = Buffer.from(textParts.join(':'), 'hex');
+    let decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  } catch(e) {
+    console.error('Decryption failed', e);
+    return '';
+  }
+}
+
+app.get('/api/delivery-providers', (req, res) => {
+  const providers = readJSONFile(DELIVERY_PROVIDERS_FILE_PATH, []);
+  // Return without secret_key for frontend security, or mask it
+  const safeProviders = providers.map(p => ({
+    ...p,
+    secret_key: p.secret_key ? '********' : '' // Masked
+  }));
+  res.json(safeProviders);
+});
+
+app.post('/api/delivery-providers/update', (req, res) => {
+  const updatedProviders = req.body; // Array of providers
+  const currentProviders = readJSONFile(DELIVERY_PROVIDERS_FILE_PATH, []);
+  
+  const newProviders = updatedProviders.map(up => {
+    const current = currentProviders.find(c => c.id === up.id) || {};
+    return {
+      ...up,
+      // If the frontend sends '********', it means the secret hasn't changed. Keep the encrypted one.
+      // If it sends something else, it's a new secret, so encrypt it.
+      secret_key: (up.secret_key === '********') ? current.secret_key : encrypt(up.secret_key)
+    };
+  });
+  
+  writeJSONFile(DELIVERY_PROVIDERS_FILE_PATH, newProviders);
+  res.json({ message: 'Delivery providers updated successfully' });
+});
+
+import * as providerManager from './shipping/providerManager.js';
+
+app.post('/api/delivery-providers/test', async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'Provider ID required' });
+  
+  try {
+    const currentProviders = readJSONFile(DELIVERY_PROVIDERS_FILE_PATH, []);
+    const providerConfig = currentProviders.find(p => p.id === id);
+    
+    if (!providerConfig) {
+      return res.status(404).json({ error: 'Provider config not found' });
+    }
+
+    // In a real app we decrypt the keys here to pass to the provider
+    const result = await providerManager.testConnection(id, {
+      api_key: providerConfig.api_key,
+      secret_key: decrypt(providerConfig.secret_key)
+    });
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Test Connection Error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -579,6 +857,6 @@ app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`TRIBAL COFFEE LOUNGE BACKEND RUNNING ON PORT ${PORT}`);
   console.log(`Serving static images from public/`);
-  console.log(`Serving dynamic persistence connected to MongoDB`);
+  console.log(`Serving dynamic persistence from local JSON files`);
   console.log(`====================================================`);
 });

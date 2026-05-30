@@ -10,6 +10,7 @@ import {
   TRIBAL_PRODUCTS, addProduct, updateProduct, deleteProduct,
   resetDB, type RealProduct, API_BASE_URL
 } from '../services/db';
+import * as XLSX from 'xlsx';
 
 // Interfaces for mock structures
 interface ShipmentOrder {
@@ -58,7 +59,7 @@ interface AdminUser {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [adminName, setAdminName] = useState(loggedInUser?.name || 'Sharmila K');
   // General navigation
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'shiprocket' | 'chat' | 'admins'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'shiprocket' | 'deliveryPartners' | 'chat' | 'admins' | 'users'>('analytics');
 
   // Product CRUD states
   const [productsList, setProductsList] = useState<RealProduct[]>([...TRIBAL_PRODUCTS]);
@@ -79,6 +80,9 @@ interface AdminUser {
   const [formBody, setFormBody] = useState(3);
   const [formChicory, setFormChicory] = useState('0% Chicory');
   const [formPrice, setFormPrice] = useState(399);
+  const [formPrice750g, setFormPrice750g] = useState(749);
+  const [formSize1Name, setFormSize1Name] = useState('350g');
+  const [formSize2Name, setFormSize2Name] = useState('750g');
   const [formOriginalPrice, setFormOriginalPrice] = useState('');
   const [formTastingNotes, setFormTastingNotes] = useState('');
   const [formImage, setFormImage] = useState('/images/Arabica Coffee Beans.webp');
@@ -97,12 +101,99 @@ interface AdminUser {
   const [shippingRates, setShippingRates] = useState<any[] | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedLabelShipment, setSelectedLabelShipment] = useState<ShipmentOrder | null>(null);
+
+  // Delivery Providers State
+  const [deliveryProviders, setDeliveryProviders] = useState<any[]>([]);
+  const [isProvidersLoading, setIsProvidersLoading] = useState(false);
+  const [providerSaveStatus, setProviderSaveStatus] = useState<string | null>(null);
+  
+  // Custom Provider Modal State
+  const [isAddProviderModalOpen, setIsAddProviderModalOpen] = useState(false);
+  const [formNewProvider, setFormNewProvider] = useState({
+    name: '', id: '', api_base_url: '', api_key: '', secret_key: '',
+    tracking_endpoint: '', shipment_endpoint: '', webhook_url: '', logo_url: ''
+  });
+
+  useEffect(() => {
+    if (activeTab === 'deliveryPartners') {
+      setIsProvidersLoading(true);
+      fetch(`${API_BASE_URL}/api/delivery-providers`)
+        .then(res => res.json())
+        .then(data => {
+          setDeliveryProviders(data);
+          setIsProvidersLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setIsProvidersLoading(false);
+        });
+    }
+  }, [activeTab]);
   const [selectedTrackingShipment, setSelectedTrackingShipment] = useState<ShipmentOrder | null>(null);
   // Live Chat states
   const [chats, setChats] = useState<ActiveChat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>('');
   const [typedMessage, setTypedMessage] = useState('');
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Date and Monthly filtering states
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterMonth, setFilterMonth] = useState('all');
+  const [orderSubTab, setOrderSubTab] = useState<'new_requests' | 'history'>('new_requests');
+
+  const parseBookingDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+    const dashParts = dateStr.split('-');
+    if (dashParts.length === 3) {
+      const year = parseInt(dashParts[0], 10);
+      const month = parseInt(dashParts[1], 10) - 1;
+      const day = parseInt(dashParts[2], 10);
+      return new Date(year, month, day);
+    }
+    return null;
+  };
+
+  const filteredShipments = shipments.filter(s => {
+    // 1. Month Filter (YYYY-MM)
+    if (filterMonth !== 'all' && s.date) {
+      const dateObj = parseBookingDate(s.date);
+      if (dateObj) {
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const formattedMonth = `${year}-${month}`;
+        if (formattedMonth !== filterMonth) return false;
+      } else {
+        return false;
+      }
+    }
+
+    // 2. Custom Date Range Filters
+    if (s.date) {
+      const dateObj = parseBookingDate(s.date);
+      if (dateObj) {
+        if (filterStartDate) {
+          const start = new Date(filterStartDate);
+          start.setHours(0, 0, 0, 0);
+          if (dateObj < start) return false;
+        }
+        if (filterEndDate) {
+          const end = new Date(filterEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (dateObj > end) return false;
+        }
+      }
+    }
+
+    return true;
+  });
 
   // Multi-Admin states
   const [admins, setAdmins] = useState<AdminUser[]>([
@@ -331,7 +422,10 @@ interface AdminUser {
     setFormAcidity(2);
     setFormBody(4);
     setFormChicory('0% Chicory');
-    setFormPrice(449);
+    setFormPrice(499);
+    setFormPrice750g(899);
+    setFormSize1Name('350g');
+    setFormSize2Name('750g');
     setFormOriginalPrice('');
     setFormTastingNotes('Sweet Caramel, Dark Cacao, Fruit Compote');
     setFormImage('/images/Arabica Coffee Beans.webp');
@@ -355,7 +449,10 @@ interface AdminUser {
     setFormBody(product.body);
     setFormChicory(product.chicory);
     setFormPrice(product.price);
-    setFormOriginalPrice(product.originalPrice ? String(product.originalPrice) : '');
+    setFormPrice750g(product.price750g || Math.round(product.price * 1.8));
+    setFormSize1Name(product.size1Name || '350g');
+    setFormSize2Name(product.size2Name || '750g');
+    setFormOriginalPrice(product.originalPrice ? product.originalPrice.toString() : '');
     setFormTastingNotes(product.tastingNotes.join(', '));
     setFormImage(product.image);
     setFormDescription(product.description);
@@ -384,6 +481,9 @@ interface AdminUser {
       chicory: formChicory,
       tastingNotes: parsedNotes.length ? parsedNotes : ['Chocolate notes'],
       price: Number(formPrice),
+      price750g: Number(formPrice750g),
+      size1Name: formSize1Name || '350g',
+      size2Name: formSize2Name || '750g',
       originalPrice: formOriginalPrice ? Number(formOriginalPrice) : undefined,
       image: formImage,
       description: formDescription || 'Custom batch roasted to perfection in our volcanic wood furnaces.',
@@ -403,6 +503,80 @@ interface AdminUser {
   const handleDeleteProduct = (id: string) => {
     if (confirm('Are you sure you want to delete this organic blend from your vaults?')) {
       deleteProduct(id);
+    }
+  };
+
+  // Delivery Providers Handlers
+  const handleUpdateProvider = (id: string, field: string, value: any) => {
+    setDeliveryProviders(prev => prev.map(p => {
+      if (p.id === id) {
+        if (field === 'is_default' && value === true) {
+          return { ...p, is_default: true, is_enabled: true };
+        }
+        return { ...p, [field]: value };
+      } else {
+        if (field === 'is_default' && value === true) {
+          return { ...p, is_default: false };
+        }
+        return p;
+      }
+    }));
+  };
+
+  const handleSaveProviders = () => {
+    setProviderSaveStatus('Saving...');
+    fetch(`${API_BASE_URL}/api/delivery-providers/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(deliveryProviders)
+    })
+      .then(res => res.json())
+      .then(() => {
+        setProviderSaveStatus('Saved Successfully ✓');
+        setTimeout(() => setProviderSaveStatus(null), 3000);
+      });
+  };
+
+  const handleTestProvider = (id: string) => {
+    fetch(`${API_BASE_URL}/api/delivery-providers/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    })
+      .then(res => res.json())
+      .then(data => alert(data.message));
+  };
+
+  const handleAddCustomProvider = () => {
+    if (!formNewProvider.name || !formNewProvider.api_base_url) {
+      alert("Name and API Base URL are required.");
+      return;
+    }
+    
+    // Auto-generate ID if not provided
+    const newId = formNewProvider.id || formNewProvider.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    
+    const newProviderObj = {
+      ...formNewProvider,
+      id: newId,
+      is_custom: true,
+      is_enabled: false,
+      is_default: false
+    };
+
+    setDeliveryProviders(prev => [...prev, newProviderObj]);
+    setIsAddProviderModalOpen(false);
+    setFormNewProvider({
+      name: '', id: '', api_base_url: '', api_key: '', secret_key: '',
+      tracking_endpoint: '', shipment_endpoint: '', webhook_url: '', logo_url: ''
+    });
+    // Optional: Auto-save immediately
+    // handleSaveProviders();
+  };
+
+  const handleDeleteProvider = (id: string) => {
+    if (confirm("Are you sure you want to delete this custom provider?")) {
+      setDeliveryProviders(prev => prev.filter(p => p.id !== id));
     }
   };
 
@@ -602,6 +776,43 @@ interface AdminUser {
       }
     }
   };
+
+  const handleExportToExcel = () => {
+    if (filteredShipments.length === 0) {
+      alert("No data to export for the selected filters.");
+      return;
+    }
+
+    const exportData = filteredShipments.map(s => ({
+      'Order ID': s.id,
+      'Date': s.date || 'N/A',
+      'Customer Name': s.customerName,
+      'Email': s.email,
+      'City': s.city,
+      'Pincode': s.pincode,
+      'Product(s)': s.productName,
+      'Amount (₹)': s.amount,
+      'Status': s.status,
+      'AWB / Logistics': s.awb ? `${s.awb} (${s.courier})` : 'Not Dispatched'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+
+    let fileName = 'Tribal_Coffee_Orders_Report';
+    if (filterMonth !== 'all') {
+      fileName += `_${filterMonth}`;
+    } else if (filterStartDate && filterEndDate) {
+      fileName += `_${filterStartDate}_to_${filterEndDate}`;
+    } else {
+      fileName += `_All_Time`;
+    }
+    fileName += '.xlsx';
+
+    XLSX.writeFile(workbook, fileName);
+  };
+
   const filteredProducts = productsList.filter(prod => {
     const matchesSearch = prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prod.roast.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -654,6 +865,7 @@ interface AdminUser {
               </p>
 
               <form onSubmit={handleLoginSubmit} className="space-y-5 text-left">
+
                 <div>
                   <label className="text-[10px] text-cream-latte/60 font-sans uppercase tracking-wider mb-2 block font-bold">
                     Email Address
@@ -765,7 +977,7 @@ interface AdminUser {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
             {/* LEFT COLUMN: NAVIGATION SIDEBAR */}
-            <div className="lg:col-span-3 flex flex-col gap-4 text-left">
+            <div className="lg:col-span-3 flex flex-col gap-4 text-left sticky top-8 h-fit">
               <div className="glassmorphism border border-warm-gold/15 p-4 rounded-3xl">
                 <div className="flex items-center gap-3 p-3 bg-espresso/50 border border-warm-gold/10 rounded-2xl mb-4 group relative">
                   <div className="w-10 h-10 rounded-full bg-warm-gold text-espresso flex items-center justify-center font-playfair font-black text-sm shadow-[0_0_10px_#D6B27A] shrink-0 uppercase">
@@ -846,11 +1058,25 @@ interface AdminUser {
                   >
                     <div className="flex items-center gap-3">
                       <Truck size={16} />
-                      Shiprocket Logistics
+                      Orders
                     </div>
                     <span className="bg-amber-950 text-warm-gold border border-warm-gold/25 px-2 py-0.5 rounded-md text-[9px] font-sans font-bold">
-                      Syncing
+                      Active
                     </span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('deliveryPartners')}
+                    className={`w-full p-3.5 rounded-2xl flex items-center justify-between font-sans text-xs tracking-wider uppercase font-bold transition-all cursor-pointer ${
+                      activeTab === 'deliveryPartners'
+                        ? 'bg-warm-gold text-espresso shadow-[0_4px_16px_rgba(200,169,126,0.2)]'
+                        : 'bg-transparent text-cream-latte/70 hover:bg-cream-latte/5 hover:text-cream-latte'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Layers size={16} />
+                      Delivery Partners
+                    </div>
                   </button>
 
                   <button
@@ -880,7 +1106,22 @@ interface AdminUser {
                   >
                     <div className="flex items-center gap-3">
                       <Users size={16} />
-                      Multi-Admin Hub
+                      Staff & Admins Hub
+                    </div>
+                    <ChevronRight size={14} />
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className={`w-full p-3.5 rounded-2xl flex items-center justify-between font-sans text-xs tracking-wider uppercase font-bold transition-all cursor-pointer ${
+                      activeTab === 'users'
+                        ? 'bg-warm-gold text-espresso shadow-[0_4px_16px_rgba(200,169,126,0.2)]'
+                        : 'bg-transparent text-cream-latte/70 hover:bg-cream-latte/5 hover:text-cream-latte'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Users size={16} />
+                      Connoisseur Registry
                     </div>
                     <ChevronRight size={14} />
                   </button>
@@ -947,9 +1188,19 @@ interface AdminUser {
                             <span className="text-[10px] font-sans text-warm-gold uppercase tracking-widest font-bold">Monthly Sales Performance</span>
                             <h4 className="font-playfair font-bold text-xl text-cream-latte mt-1">Revenue Matrix (₹)</h4>
                           </div>
-                          <span className="bg-warm-gold/15 border border-warm-gold/20 text-warm-gold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider font-bold">
-                            Year 2026
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={handleExportToExcel}
+                              className="px-3 py-1.5 bg-warm-gold text-espresso text-[10px] uppercase font-bold tracking-wider rounded-lg hover:bg-cream-latte transition-colors flex items-center gap-1.5 shadow-md cursor-pointer"
+                              title="Download Report as Excel"
+                            >
+                              <FileText size={12} className="stroke-[2.5]" />
+                              Export Data
+                            </button>
+                            <span className="bg-warm-gold/15 border border-warm-gold/20 text-warm-gold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider font-bold">
+                              Year 2026
+                            </span>
+                          </div>
                         </div>
                         {/* Interactive Responsive SVG Area Chart */}
                         <div className="h-64 w-full relative">
@@ -1205,14 +1456,14 @@ interface AdminUser {
                 </div>
               )}
 
-              {/* TAB 3: SHIPROCKET LOGISTICS */}
+              {/* TAB 3: ORDERS MANAGEMENT */}
               {activeTab === 'shiprocket' && (
                 <div className="flex flex-col gap-8 text-left">
                   
                   {/* Shipping rates calculator */}
                   <div className="glassmorphism border border-warm-gold/15 p-6 rounded-[30px]">
                     <span className="text-[10px] font-sans text-warm-gold uppercase tracking-[0.25em] font-bold block mb-1">
-                      Shiprocket API Integration
+                      Integrated Delivery Partners
                     </span>
                     <h3 className="font-playfair font-bold text-xl text-cream-latte mb-6">
                       Real-time Courier Routing & Rate Calculator
@@ -1244,7 +1495,7 @@ interface AdminUser {
                           onChange={(e) => setCalcWeight(e.target.value)}
                           className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-xs font-sans text-cream-latte focus:outline-none cursor-pointer"
                         >
-                          <option value="0.25">0.25 kg (1 Standard pouch)</option>
+                          <option value="0.25">0.25 kg (1 pouch)</option>
                           <option value="0.5">0.5 kg (2 Pouches)</option>
                           <option value="1.0">1.0 kg (4 Pouches)</option>
                           <option value="2.0">2.0 kg (Co-op Bulk)</option>
@@ -1254,7 +1505,7 @@ interface AdminUser {
                         onClick={handleCalculateShipping}
                         className="w-full py-2.5 bg-warm-gold text-espresso font-sans text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-cream-latte transition-colors cursor-pointer"
                       >
-                        {isCalculating ? 'Computing Rates...' : 'Get Shiprocket Rates'}
+                        {isCalculating ? 'Computing Rates...' : 'Get Shipping Rates'}
                       </button>
                     </div>
 
@@ -1289,11 +1540,118 @@ interface AdminUser {
                     </AnimatePresence>
                   </div>
 
-                  {/* Shiprocket Shipments list */}
+                  {/* Sub-tab segmented selectors */}
+                  <div className="flex items-center justify-start gap-4 border-b border-warm-gold/10 pb-1">
+                    <button
+                      onClick={() => setOrderSubTab('new_requests')}
+                      className={`px-5 py-2.5 font-sans text-xs tracking-wider uppercase font-bold border-b-2 transition-all cursor-pointer ${
+                        orderSubTab === 'new_requests'
+                          ? 'border-warm-gold text-warm-gold'
+                          : 'border-transparent text-cream-latte/60 hover:text-cream-latte'
+                      }`}
+                    >
+                      New Order Requests ({filteredShipments.filter(s => s.status === 'Pending' || s.status === 'Ready to Ship').length})
+                    </button>
+                    <button
+                      onClick={() => setOrderSubTab('history')}
+                      className={`px-5 py-2.5 font-sans text-xs tracking-wider uppercase font-bold border-b-2 transition-all cursor-pointer ${
+                        orderSubTab === 'history'
+                          ? 'border-warm-gold text-warm-gold'
+                          : 'border-transparent text-cream-latte/60 hover:text-cream-latte'
+                      }`}
+                    >
+                      Order History ({filteredShipments.filter(s => s.status === 'Dispatched' || s.status === 'Delivered').length})
+                    </button>
+                  </div>
+
+                  {/* Shipments list */}
                   <div className="glassmorphism border border-warm-gold/15 rounded-3xl overflow-hidden shadow-lg">
-                    <div className="bg-espresso/60 border-b border-warm-gold/10 px-6 py-4 flex items-center justify-between">
-                      <h4 className="font-playfair font-bold text-base text-cream-latte">Order Shipments Matrices</h4>
-                      <span className="text-[10px] text-warm-gold font-sans font-bold uppercase tracking-widest">Auto-linked to frontend</span>
+                    <div className="bg-espresso/60 border-b border-warm-gold/10 px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div>
+                        <h4 className="font-playfair font-bold text-base text-cream-latte">
+                          {orderSubTab === 'new_requests' ? 'New Requests (Pending / Ready to Ship)' : 'Archive & History (Dispatched / Delivered)'}
+                        </h4>
+                        <span className="text-[10px] text-warm-gold font-sans font-bold uppercase tracking-widest">Auto-linked to frontend data</span>
+                      </div>
+
+                      {/* Clean premium date filter controls */}
+                      <div className="flex flex-wrap items-center gap-3">
+                        {/* Monthly selector */}
+                        <div className="flex flex-col text-left">
+                          <span className="text-[8px] text-cream-latte/50 font-sans uppercase tracking-widest font-bold mb-1">Quick Month</span>
+                          <select
+                            value={filterMonth}
+                            onChange={(e) => {
+                              setFilterMonth(e.target.value);
+                              if (e.target.value !== 'all') {
+                                setFilterStartDate('');
+                                setFilterEndDate('');
+                              }
+                            }}
+                            className="bg-espresso/70 border border-cream-latte/15 rounded-xl px-3 py-1.5 text-xs font-sans text-cream-latte focus:outline-none cursor-pointer"
+                          >
+                            <option value="all">All Months</option>
+                            <option value="2026-05">May 2026</option>
+                            <option value="2026-04">April 2026</option>
+                            <option value="2026-03">March 2026</option>
+                            <option value="2026-02">February 2026</option>
+                            <option value="2026-01">January 2026</option>
+                            <option value="2025-12">December 2025</option>
+                            <option value="2025-11">November 2025</option>
+                            <option value="2018-11">November 2018</option>
+                          </select>
+                        </div>
+
+                        {/* Start Date */}
+                        <div className="flex flex-col text-left">
+                          <span className="text-[8px] text-cream-latte/50 font-sans uppercase tracking-widest font-bold mb-1">Start Date</span>
+                          <input
+                            type="date"
+                            value={filterStartDate}
+                            onChange={(e) => {
+                              setFilterStartDate(e.target.value);
+                              if (e.target.value) setFilterMonth('all');
+                            }}
+                            className="bg-espresso/70 border border-cream-latte/15 rounded-xl px-3 py-1 text-xs font-sans text-cream-latte focus:outline-none"
+                          />
+                        </div>
+
+                        {/* End Date */}
+                        <div className="flex flex-col text-left">
+                          <span className="text-[8px] text-cream-latte/50 font-sans uppercase tracking-widest font-bold mb-1">End Date</span>
+                          <input
+                            type="date"
+                            value={filterEndDate}
+                            onChange={(e) => {
+                              setFilterEndDate(e.target.value);
+                              if (e.target.value) setFilterMonth('all');
+                            }}
+                            className="bg-espresso/70 border border-cream-latte/15 rounded-xl px-3 py-1 text-xs font-sans text-cream-latte focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Reset Filters button */}
+                        {(filterMonth !== 'all' || filterStartDate || filterEndDate) && (
+                          <button
+                            onClick={() => {
+                              setFilterMonth('all');
+                              setFilterStartDate('');
+                              setFilterEndDate('');
+                            }}
+                            className="mt-4 px-3 py-1 bg-cream-latte/10 hover:bg-cream-latte/20 border border-cream-latte/15 rounded-xl text-[10px] font-sans text-cream-latte uppercase tracking-wider font-bold transition-all cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <button
+                          onClick={handleExportToExcel}
+                          className="mt-4 px-3 py-1 bg-warm-gold text-espresso border border-warm-gold/20 rounded-xl text-[10px] font-sans uppercase tracking-wider font-bold transition-all cursor-pointer hover:bg-cream-latte flex items-center gap-1"
+                          title="Download Report as Excel"
+                        >
+                          <FileText size={10} className="stroke-[2.5]" />
+                          Export Excel
+                        </button>
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -1302,75 +1660,411 @@ interface AdminUser {
                           <tr className="border-b border-warm-gold/10 text-[10px] text-warm-gold uppercase tracking-[0.2em] bg-espresso/30 font-bold">
                             <th className="py-4 px-6 text-left">Order Details</th>
                             <th className="py-4 px-6 text-left">Customer</th>
+                            <th className="py-4 px-6 text-left">Date</th>
+                            <th className="py-4 px-6 text-left">Amount</th>
                             <th className="py-4 px-6 text-left">AWB Code / Logistics</th>
                             <th className="py-4 px-6 text-left">Status</th>
-                            <th className="py-4 px-6 text-center">AWB Action</th>
+                            <th className="py-4 px-6 text-center">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-warm-gold/5 font-sans text-xs">
-                          {shipments.map((s) => (
-                            <tr key={s.id} className="hover:bg-cream-latte/[0.02] transition-colors">
-                              <td className="py-4 px-6 text-left">
-                                <div className="font-bold text-cream-latte">{s.id}</div>
-                                <div className="text-[10px] text-cream-latte/50 mt-0.5">{s.productName}</div>
-                              </td>
-                              <td className="py-4 px-6 text-left">
-                                <div className="font-bold text-cream-latte">{s.customerName}</div>
-                                <div className="text-[10px] text-cream-latte/45 mt-0.5">{s.city} (PIN: {s.pincode})</div>
-                              </td>
-                              <td className="py-4 px-6 text-left">
-                                {s.awb ? (
-                                  <div>
-                                    <div className="font-bold text-warm-gold tracking-widest">{s.awb}</div>
-                                    <div className="text-[10px] text-cream-latte/45 mt-0.5">{s.courier}</div>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-cream-latte/30 uppercase tracking-widest">Not Dispatched</span>
-                                )}
-                              </td>
-                              <td className="py-4 px-6 text-left">
-                                <span className={`px-3 py-1 rounded-full text-[9px] font-sans font-bold uppercase tracking-wider border ${
-                                  s.status === 'Pending' ? 'bg-red-950/20 border-red-500/20 text-red-300' :
-                                  s.status === 'Ready to Ship' ? 'bg-amber-950/20 border-amber-500/20 text-amber-300' :
-                                  s.status === 'Dispatched' ? 'bg-indigo-950/20 border-indigo-500/20 text-indigo-300' :
-                                  'bg-emerald-950/20 border-emerald-500/20 text-emerald-300'
-                                }`}>
-                                  {s.status}
-                                </span>
-                              </td>
-                              <td className="py-4 px-6 text-center">                                <div className="flex items-center justify-center gap-2">
-                                  {s.status === 'Pending' || s.status === 'Ready to Ship' ? (
-                                    <button
-                                      onClick={() => handleDispatchShipment(s.id, 'Delhivery Prime - Express')}
-                                      className="px-4 py-2 bg-warm-gold text-espresso font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-cream-latte transition-all cursor-pointer shadow-md font-bold"
-                                    >
-                                      Generate AWB
-                                    </button>
+                          {filteredShipments.filter(s => 
+                            orderSubTab === 'new_requests'
+                              ? (s.status === 'Pending' || s.status === 'Ready to Ship')
+                              : (s.status === 'Dispatched' || s.status === 'Delivered')
+                          ).length > 0 ? (
+                            filteredShipments.filter(s => 
+                              orderSubTab === 'new_requests'
+                                ? (s.status === 'Pending' || s.status === 'Ready to Ship')
+                                : (s.status === 'Dispatched' || s.status === 'Delivered')
+                            ).map((s) => (
+                              <tr key={s.id} className="hover:bg-cream-latte/[0.02] transition-colors">
+                                <td className="py-4 px-6 text-left">
+                                  <div className="font-bold text-cream-latte">{s.id}</div>
+                                  <div className="text-[10px] text-cream-latte/50 mt-0.5">{s.productName}</div>
+                                </td>
+                                <td className="py-4 px-6 text-left">
+                                  <div className="font-bold text-cream-latte">{s.customerName}</div>
+                                  <div className="text-[10px] text-cream-latte/45 mt-0.5">{s.city} (PIN: {s.pincode})</div>
+                                </td>
+                                <td className="py-4 px-6 text-left font-bold text-cream-latte/80">
+                                  {s.date || 'N/A'}
+                                </td>
+                                <td className="py-4 px-6 text-left font-bold text-[#F8E8D2]">
+                                  ₹{s.amount || 0}
+                                </td>
+                                <td className="py-4 px-6 text-left">
+                                  {s.awb ? (
+                                    <div>
+                                      <div className="font-bold text-warm-gold tracking-widest">{s.awb}</div>
+                                      <div className="text-[10px] text-cream-latte/45 mt-0.5">{s.courier}</div>
+                                    </div>
                                   ) : (
-                                    <>
-                                      <button
-                                        onClick={() => setSelectedLabelShipment(s)}
-                                        className="px-3 py-2 bg-cream-latte/5 hover:bg-cream-latte/15 border border-cream-latte/10 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-cream-latte hover:text-warm-gold transition-all cursor-pointer flex items-center gap-1 font-bold"
-                                      >
-                                        <FileText size={10} />
-                                        Label
-                                      </button>
-                                      <button
-                                        onClick={() => setSelectedTrackingShipment(s)}
-                                        className="px-3 py-2 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/25 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer flex items-center gap-1 font-bold"
-                                      >
-                                        <TrendingUp size={10} />
-                                        Track Live
-                                      </button>
-                                    </>
+                                    <span className="text-[10px] text-cream-latte/30 uppercase tracking-widest">Not Dispatched</span>
                                   )}
-                                </div>                              </td>
+                                </td>
+                                <td className="py-4 px-6 text-left">
+                                  <span className={`px-3 py-1 rounded-full text-[9px] font-sans font-bold uppercase tracking-wider border ${
+                                    s.status === 'Pending' ? 'bg-red-950/20 border-red-500/20 text-red-300' :
+                                    s.status === 'Ready to Ship' ? 'bg-amber-950/20 border-amber-500/20 text-amber-300' :
+                                    s.status === 'Dispatched' ? 'bg-indigo-950/20 border-indigo-500/20 text-indigo-300' :
+                                    'bg-emerald-950/20 border-emerald-500/20 text-emerald-300'
+                                  }`}>
+                                    {s.status}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-6 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    {s.status === 'Pending' || s.status === 'Ready to Ship' ? (
+                                      <button
+                                        onClick={() => handleDispatchShipment(s.id, 'Delhivery Prime - Express')}
+                                        className="px-4 py-2 bg-warm-gold text-espresso font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-cream-latte transition-all cursor-pointer shadow-md font-bold"
+                                      >
+                                        Generate AWB
+                                      </button>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={() => setSelectedLabelShipment(s)}
+                                          className="px-3 py-2 bg-cream-latte/5 hover:bg-cream-latte/15 border border-cream-latte/10 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-cream-latte hover:text-warm-gold transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        >
+                                          <FileText size={10} />
+                                          Label
+                                        </button>
+                                        <button
+                                          onClick={() => setSelectedTrackingShipment(s)}
+                                          className="px-3 py-2 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/25 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        >
+                                          <TrendingUp size={10} />
+                                          Track Live
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={7} className="py-12 text-center text-cream-latte/40">
+                                <HelpCircle className="mx-auto mb-3 text-cream-latte/20" size={32} />
+                                No matching orders found.
+                              </td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* TAB 3.5: DELIVERY PARTNERS */}
+              {activeTab === 'deliveryPartners' && (
+                <div className="flex flex-col gap-6 text-left">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h2 className="text-2xl font-bebas tracking-widest text-warm-gold">Delivery Partners</h2>
+                      <p className="text-sm font-sans text-cream-latte/70">Manage shipping providers and API credentials.</p>
+                    </div>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setIsAddProviderModalOpen(true)}
+                        className="border border-warm-gold/50 text-warm-gold px-6 py-2.5 rounded-xl font-bold font-sans text-sm hover:bg-warm-gold/10 transition-all flex items-center gap-2"
+                      >
+                        <PlusCircle size={16} /> Add Custom Provider
+                      </button>
+                      <button
+                        onClick={handleSaveProviders}
+                        className="bg-warm-gold text-espresso px-6 py-2.5 rounded-xl font-bold font-sans text-sm hover:shadow-[0_0_15px_rgba(200,169,126,0.4)] transition-all"
+                      >
+                        {providerSaveStatus || 'Save Settings'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isProvidersLoading ? (
+                    <div className="text-center py-20 text-warm-gold font-sans uppercase tracking-widest">
+                      <RefreshCw className="animate-spin mx-auto mb-4" size={32} />
+                      Loading Providers...
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {deliveryProviders.map(provider => (
+                        <div key={provider.id} className="glassmorphism border border-warm-gold/20 p-6 rounded-3xl relative overflow-hidden flex flex-col group">
+                          {/* Active Glow */}
+                          {provider.is_enabled && (
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 blur-[40px] rounded-full pointer-events-none" />
+                          )}
+                          
+                          <div className="flex justify-between items-start mb-6 z-10">
+                            <div>
+                              <h3 className="font-bebas text-xl text-cream-latte tracking-wide">{provider.name}</h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`w-2 h-2 rounded-full ${provider.is_enabled ? 'bg-green-500' : 'bg-red-500'}`} />
+                                <span className="text-xs font-sans text-cream-latte/60">
+                                  {provider.is_enabled ? 'Connected' : 'Disconnected'}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* Toggle Enable */}
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer" 
+                                checked={provider.is_enabled}
+                                onChange={(e) => handleUpdateProvider(provider.id, 'is_enabled', e.target.checked)}
+                              />
+                              <div className="w-11 h-6 bg-espresso/50 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-cream-latte after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-warm-gold"></div>
+                            </label>
+                          </div>
+
+                          <div className="space-y-4 z-10 flex-grow">
+                            <div>
+                              <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-1.5">API Key</label>
+                              <input
+                                type="text"
+                                value={provider.api_key}
+                                onChange={(e) => handleUpdateProvider(provider.id, 'api_key', e.target.value)}
+                                className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-2 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                placeholder="Enter API Key"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-1.5">Secret Key</label>
+                              <input
+                                type="password"
+                                value={provider.secret_key}
+                                onChange={(e) => handleUpdateProvider(provider.id, 'secret_key', e.target.value)}
+                                className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-2 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                placeholder="Enter Secret Key"
+                              />
+                            </div>
+                            {provider.is_custom && (
+                              <>
+                                <div>
+                                  <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-1.5">Base URL</label>
+                                  <input
+                                    type="text"
+                                    value={provider.api_base_url || ''}
+                                    onChange={(e) => handleUpdateProvider(provider.id, 'api_base_url', e.target.value)}
+                                    className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-2 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                    placeholder="https://api.example.com"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-1.5">Tracking Endpoint</label>
+                                    <input
+                                      type="text"
+                                      value={provider.tracking_endpoint || ''}
+                                      onChange={(e) => handleUpdateProvider(provider.id, 'tracking_endpoint', e.target.value)}
+                                      className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-2 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                      placeholder="/track"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-1.5">Shipment Endpoint</label>
+                                    <input
+                                      type="text"
+                                      value={provider.shipment_endpoint || ''}
+                                      onChange={(e) => handleUpdateProvider(provider.id, 'shipment_endpoint', e.target.value)}
+                                      className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-2 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                      placeholder="/ship"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          <div className="mt-6 pt-6 border-t border-warm-gold/10 flex items-center justify-between z-10">
+                            <label className="flex items-center gap-2 cursor-pointer group/radio">
+                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${provider.is_default ? 'border-warm-gold bg-warm-gold/20' : 'border-cream-latte/30 group-hover/radio:border-warm-gold/50'}`}>
+                                {provider.is_default && <div className="w-2 h-2 rounded-full bg-warm-gold" />}
+                              </div>
+                              <input 
+                                type="radio" 
+                                name="defaultProvider" 
+                                className="hidden"
+                                checked={provider.is_default}
+                                onChange={() => handleUpdateProvider(provider.id, 'is_default', true)}
+                              />
+                              <span className={`text-xs font-sans font-bold uppercase tracking-wider ${provider.is_default ? 'text-warm-gold' : 'text-cream-latte/50 group-hover/radio:text-cream-latte/80'}`}>
+                                Default
+                              </span>
+                            </label>
+                            
+                            <div className="flex gap-2">
+                              {provider.is_custom && (
+                                <button
+                                  onClick={() => handleDeleteProvider(provider.id)}
+                                  className="text-xs font-sans font-bold uppercase tracking-wider text-red-500/70 hover:text-red-500 transition-colors flex items-center p-1"
+                                  title="Delete Custom Provider"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleTestProvider(provider.id)}
+                                className="text-xs font-sans font-bold uppercase tracking-wider text-cream-latte/70 hover:text-warm-gold transition-colors flex items-center gap-1.5"
+                              >
+                                <Send size={12} />
+                                Test API
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add Provider Modal */}
+                  <AnimatePresence>
+                    {isAddProviderModalOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                      >
+                        <motion.div 
+                          initial={{ scale: 0.9, y: 20 }}
+                          animate={{ scale: 1, y: 0 }}
+                          exit={{ scale: 0.9, y: 20 }}
+                          className="bg-gradient-to-b from-[#2a1b14] to-[#1a100c] border border-warm-gold/20 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col"
+                        >
+                          <div className="p-6 border-b border-warm-gold/10 flex justify-between items-center bg-black/20 shrink-0">
+                            <h2 className="font-bebas text-2xl tracking-widest text-warm-gold">Add Custom Delivery Partner</h2>
+                            <button onClick={() => setIsAddProviderModalOpen(false)} className="text-cream-latte/50 hover:text-warm-gold transition-colors">
+                              <X size={24} />
+                            </button>
+                          </div>
+                          
+                          <div className="p-6 overflow-y-auto space-y-6 flex-grow custom-scrollbar">
+                            <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">Provider Name *</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.name}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, name: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="e.g. FedEx India"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">Provider Slug / ID</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.id}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, id: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="Leave blank to auto-generate"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">API Base URL *</label>
+                              <input
+                                type="text"
+                                value={formNewProvider.api_base_url}
+                                onChange={(e) => setFormNewProvider({...formNewProvider, api_base_url: e.target.value})}
+                                className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                placeholder="https://api.provider.com/v1"
+                              />
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">API Key</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.api_key}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, api_key: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="Optional"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">Secret Key</label>
+                                <input
+                                  type="password"
+                                  value={formNewProvider.secret_key}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, secret_key: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="Optional"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">Shipment Endpoint</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.shipment_endpoint}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, shipment_endpoint: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="/shipments"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">Tracking Endpoint</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.tracking_endpoint}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, tracking_endpoint: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="/track"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">Webhook URL</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.webhook_url}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, webhook_url: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="https://..."
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold font-sans text-warm-gold uppercase tracking-widest mb-2">Logo URL</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.logo_url}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, logo_url: e.target.value})}
+                                  className="w-full bg-black/40 border border-cream-latte/10 rounded-xl px-4 py-3 text-sm text-cream-latte focus:border-warm-gold outline-none transition-colors"
+                                  placeholder="https://..."
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="p-6 border-t border-warm-gold/10 bg-black/20 flex justify-end shrink-0 gap-4">
+                            <button
+                              onClick={() => setIsAddProviderModalOpen(false)}
+                              className="px-6 py-2.5 rounded-xl font-bold font-sans text-sm text-cream-latte hover:text-warm-gold transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleAddCustomProvider}
+                              className="bg-warm-gold text-espresso px-6 py-2.5 rounded-xl font-bold font-sans text-sm hover:shadow-[0_0_15px_rgba(200,169,126,0.4)] transition-all flex items-center gap-2"
+                            >
+                              <PlusCircle size={16} /> Save Provider
+                            </button>
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
 
@@ -1499,7 +2193,7 @@ interface AdminUser {
                   {/* Actions Header */}
                   <div className="flex items-center justify-between bg-black/30 border border-cream-latte/5 p-4 rounded-2xl backdrop-blur-md">
                     <div>
-                      <h4 className="font-playfair font-bold text-sm text-cream-latte">Active Roasting Admins</h4>
+                      <h4 className="font-playfair font-bold text-sm text-cream-latte">Active Staff & Admins</h4>
                       <p className="text-[10px] text-cream-latte/45 font-sans mt-0.5">Control operational credentials and lounge permissions.</p>
                     </div>
 
@@ -1508,14 +2202,23 @@ interface AdminUser {
                       className="px-5 py-2.5 bg-warm-gold text-espresso font-sans text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-cream-latte transition-colors cursor-pointer flex items-center gap-2"
                     >
                       <UserPlus size={14} className="stroke-[2.5]" />
-                      Invite Admin
+                      Add Staff
                     </button>
                   </div>
 
-                  {/* Admin Grid list */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {admins.map((a) => (
-                      <div key={a.id} className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden flex flex-col justify-between">
+                  {/* Staff and Admin Grid lists */}
+                  {[
+                    { title: 'Administrators', filterFn: (a: any) => a.role === 'Super Admin' },
+                    { title: 'Staff Members', filterFn: (a: any) => a.role !== 'Super Admin' }
+                  ].map((section, idx) => {
+                    const filteredUsers = admins.filter(section.filterFn);
+                    if (filteredUsers.length === 0) return null;
+                    return (
+                      <div key={idx} className={idx > 0 ? "mt-8" : ""}>
+                        <h5 className="font-playfair font-bold text-lg text-cream-latte mb-4">{section.title}</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {filteredUsers.map((a) => (
+                            <div key={a.id} className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden flex flex-col justify-between">
                         <div className="absolute top-0 right-0 w-20 h-20 rounded-full filter blur-[35px] bg-warm-gold/5 -z-10" />
                         
                         <div>
@@ -1581,11 +2284,19 @@ interface AdminUser {
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
+              {/* TAB 6: USERS / CONNOISSEURS */}
+              {activeTab === 'users' && (
+                <div className="flex flex-col gap-8 text-left">
                   {/* Connoisseur Registry Panel */}
-                  <div className="bg-black/30 border border-warm-gold/15 p-6 rounded-3xl mt-8 backdrop-blur-md">
+                  <div className="bg-black/30 border border-warm-gold/15 p-6 rounded-3xl backdrop-blur-md">
                     <div className="mb-6">
                       <h4 className="font-playfair font-bold text-sm text-warm-gold">Registered Connoisseur Registry</h4>
                       <p className="text-[10px] text-cream-latte/45 font-sans mt-0.5">Real-time trace of authenticated gourmet coffee consumers.</p>
@@ -1737,16 +2448,47 @@ interface AdminUser {
                 </div>
 
                 {/* Price */}
-                <div>
-                  <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Price (₹ INR)</label>
-                  <input
-                    type="number"
-                    required
-                    value={formPrice}
-                    onChange={(e) => setFormPrice(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30"
-                    placeholder="e.g. 449"
-                  />
+                <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Base Size Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={formSize1Name}
+                      onChange={(e) => setFormSize1Name(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30 mb-4"
+                      placeholder="e.g. 350g"
+                    />
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Base Price (₹ INR)</label>
+                    <input
+                      type="number"
+                      required
+                      value={formPrice}
+                      onChange={(e) => setFormPrice(Number(e.target.value))}
+                      className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30"
+                      placeholder="e.g. 449"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Large Size Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={formSize2Name}
+                      onChange={(e) => setFormSize2Name(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30 mb-4"
+                      placeholder="e.g. 750g"
+                    />
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Large Price (₹ INR)</label>
+                    <input
+                      type="number"
+                      required
+                      value={formPrice750g}
+                      onChange={(e) => setFormPrice750g(Number(e.target.value))}
+                      className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30"
+                      placeholder="e.g. 849"
+                    />
+                  </div>
                 </div>
 
                 {/* Original Price */}
@@ -1888,12 +2630,12 @@ interface AdminUser {
                 Access Security Vault
               </span>
               <h3 className="font-playfair font-bold text-2xl text-cream-latte mb-6">
-                Authorize New Administrator
+                Add New Staff / Admin
               </h3>
 
               <form onSubmit={handleInviteAdmin} className="flex flex-col gap-5 font-sans text-xs">
                 <div>
-                  <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Admin Full Name</label>
+                  <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Staff / Admin Full Name</label>
                   <input
                     type="text"
                     required
@@ -1905,7 +2647,7 @@ interface AdminUser {
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Admin Email Address</label>
+                  <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Staff / Admin Email Address</label>
                   <input
                     type="email"
                     required

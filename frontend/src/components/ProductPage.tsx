@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, ShoppingBag, ShieldCheck, HelpCircle, Star, Award, Layers, Heart } from 'lucide-react';
+import { X, ShoppingBag, ShieldCheck, HelpCircle, Star, Award, Layers, Heart, Check } from 'lucide-react';
 import { type RealProduct, API_BASE_URL } from '../services/db';
 
 interface ProductPageProps {
   product: RealProduct;
   onClose: () => void;
-  onAddToBag: (product: any) => void;
+  onAddToBag: (product: RealProduct, size: string) => void;
   isWishlisted?: boolean;
   onToggleWishlist?: (productId: string) => void;
 }
@@ -14,7 +14,17 @@ interface ProductPageProps {
 export default function ProductPage({ product, onClose, onAddToBag, isWishlisted = false, onToggleWishlist }: ProductPageProps) {
   const [zoomStyle, setZoomStyle] = useState({ display: 'none', backgroundPosition: '0% 0%' });
   const [isStickyVisible, setIsStickyVisible] = useState(false);
+  const [selectedSize, setSelectedSize] = useState<string>(product.size1Name || '350g');
+  const [isAdding, setIsAdding] = useState(false);
   const mainCtaRef = useRef<HTMLDivElement>(null);
+
+  const handleAddToBagWithAnim = () => {
+    onAddToBag(product, selectedSize);
+    setIsAdding(true);
+    setTimeout(() => setIsAdding(false), 2000);
+  };
+
+  const currentPrice = selectedSize === (product.size2Name || '750g') && product.price750g ? product.price750g : product.price;
   
   // Handle mouse move for Apple-style high-end Zoom-on-Hover
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -103,7 +113,7 @@ export default function ProductPage({ product, onClose, onAddToBag, isWishlisted
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-start">
           
           {/* LEFT: IMAGE COLUMN WITH ZOOM-ON-HOVER */}
-          <div className="lg:col-span-6 flex flex-col items-center">
+          <div className="lg:col-span-6 flex flex-col items-center lg:sticky lg:top-32 lg:self-start">
             <div
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
@@ -174,12 +184,41 @@ export default function ProductPage({ product, onClose, onAddToBag, isWishlisted
                 </div>
               </div>
 
+              {/* Size Selector */}
+              <div className="mb-6">
+                <span className="text-[10px] font-sans tracking-[0.2em] text-cream-latte/60 font-bold uppercase mb-3 block">
+                  Select Size
+                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSelectedSize(product.size1Name || '350g')}
+                    className={`px-6 py-2.5 rounded-full font-sans text-xs font-bold tracking-widest uppercase transition-all duration-300 border cursor-pointer ${
+                      selectedSize === (product.size1Name || '350g')
+                        ? 'bg-warm-gold text-espresso border-warm-gold shadow-[0_0_12px_rgba(214,178,122,0.3)]'
+                        : 'bg-espresso/50 text-cream-latte border-cream-latte/15 hover:border-warm-gold/50'
+                    }`}
+                  >
+                    {product.size1Name || '350g'}
+                  </button>
+                  <button
+                    onClick={() => setSelectedSize(product.size2Name || '750g')}
+                    className={`px-6 py-2.5 rounded-full font-sans text-xs font-bold tracking-widest uppercase transition-all duration-300 border cursor-pointer ${
+                      selectedSize === (product.size2Name || '750g')
+                        ? 'bg-warm-gold text-espresso border-warm-gold shadow-[0_0_12px_rgba(214,178,122,0.3)]'
+                        : 'bg-espresso/50 text-cream-latte border-cream-latte/15 hover:border-warm-gold/50'
+                    }`}
+                  >
+                    {product.size2Name || '750g'}
+                  </button>
+                </div>
+              </div>
+
               {/* Price block */}
               <div className="flex items-baseline gap-4 border-b border-warm-gold/10 pb-6 mb-6">
-                <span className="font-bebas text-4xl text-warm-gold tracking-widest">
-                  ₹{product.price}.00
+                <span className="font-bebas text-4xl text-warm-gold tracking-widest transition-all">
+                  ₹{currentPrice}.00
                 </span>
-                {product.originalPrice && (
+                {product.originalPrice && selectedSize === (product.size1Name || '350g') && (
                   <span className="font-bebas text-xl text-cream-latte/40 line-through tracking-widest">
                     ₹{product.originalPrice}.00
                   </span>
@@ -291,18 +330,29 @@ export default function ProductPage({ product, onClose, onAddToBag, isWishlisted
             >
               <button
                 id={`detail-add-bag-${product.id}`}
-                onClick={() => onAddToBag(product)}
-                className="flex-grow bg-warm-gold text-espresso font-sans text-xs font-bold tracking-[0.2em] uppercase py-4 rounded-xl cursor-pointer hover:bg-cream-latte hover:text-espresso transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(200,169,126,0.2)] hover:shadow-none"
+                onClick={handleAddToBagWithAnim}
+                className={`flex-grow font-sans text-xs font-bold tracking-[0.2em] uppercase py-4 rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(200,169,126,0.2)] hover:shadow-none ${
+                  isAdding 
+                    ? 'bg-emerald-600 text-white' 
+                    : 'bg-warm-gold text-espresso hover:bg-cream-latte hover:text-espresso'
+                }`}
               >
-                <ShoppingBag size={14} />
-                Add to Bag
+                {isAdding ? (
+                  <>
+                    <Check size={14} className="animate-in zoom-in" />
+                    Added to Bag
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag size={14} />
+                    Add to Bag
+                  </>
+                )}
               </button>
 
               <button
                 id={`detail-buy-now-${product.id}`}
-                onClick={() => {
-                  onAddToBag(product);
-                }}
+                onClick={handleAddToBagWithAnim}
                 className="flex-grow bg-transparent hover:bg-warm-gold text-warm-gold hover:text-espresso border border-warm-gold/40 hover:border-warm-gold font-sans text-xs font-bold tracking-[0.2em] uppercase py-4 rounded-xl cursor-pointer transition-all duration-300 flex items-center justify-center"
               >
                 Buy Now
@@ -364,15 +414,28 @@ export default function ProductPage({ product, onClose, onAddToBag, isWishlisted
 
           <div className="flex items-center gap-6">
             <span className="font-bebas text-2xl text-warm-gold tracking-widest hidden sm:inline-block">
-              ₹{product.price}.00
+              ₹{currentPrice}.00
             </span>
             <button
-              onClick={() => onAddToBag(product)}
+              onClick={handleAddToBagWithAnim}
               id={`sticky-add-bag-${product.id}`}
-              className="bg-warm-gold hover:bg-cream-latte text-espresso font-sans text-xs font-bold tracking-widest uppercase px-6 py-3 rounded-lg flex items-center gap-2 cursor-pointer shadow-lg transition-all duration-300"
+              className={`font-sans text-xs font-bold tracking-widest uppercase px-6 py-3 rounded-lg flex items-center gap-2 cursor-pointer shadow-lg transition-all duration-300 ${
+                isAdding 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-warm-gold hover:bg-cream-latte text-espresso'
+              }`}
             >
-              <ShoppingBag size={12} />
-              Add to Bag
+              {isAdding ? (
+                <>
+                  <Check size={12} className="animate-in zoom-in" />
+                  Added
+                </>
+              ) : (
+                <>
+                  <ShoppingBag size={12} />
+                  Add to Bag
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -1,0 +1,42 @@
+[
+  {
+    "id": "shiprocket",
+    "name": "Shiprocket",
+    "is_enabled": true,
+    "is_default": true,
+    "api_key": "",
+    "secret_key": ""
+  },
+  {
+    "id": "delhivery",
+    "name": "Delhivery",
+    "is_enabled": false,
+    "is_default": false,
+    "api_key": "",
+    "secret_key": ""
+  },
+  {
+    "id": "dtdc",
+    "name": "DTDC",
+    "is_enabled": false,
+    "is_default": false,
+    "api_key": "",
+    "secret_key": ""
+  },
+  {
+    "id": "bluedart",
+    "name": "Blue Dart",
+    "is_enabled": false,
+    "is_default": false,
+    "api_key": "",
+    "secret_key": ""
+  },
+  {
+    "id": "easyship",
+    "name": "Easyship",
+    "is_enabled": false,
+    "is_default": false,
+    "api_key": "",
+    "secret_key": ""
+  }
+]
