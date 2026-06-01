@@ -104,6 +104,19 @@ if [ "$IS_NODE_BACKEND" = true ]; then
     # 3.3 Generate production-ready .htaccess to force Passenger execution on cPanel
     echo "Writing cPanel .htaccess Passenger routing configurations..."
     
+    SUBDOMAIN_PATH="$PUBLIC_HTML/test.tribalcoffee.in"
+    
+    # Extract existing PassengerNode if it exists to preserve cPanel's Node virtualenv selection
+    PASSENGER_NODE_LINE=""
+    if [ -f "$SUBDOMAIN_PATH/.htaccess" ]; then
+        PASSENGER_NODE_LINE=$(grep -i "PassengerNode" "$SUBDOMAIN_PATH/.htaccess" | head -n 1 || true)
+    elif [ -f "$PUBLIC_HTML/.htaccess" ]; then
+        PASSENGER_NODE_LINE=$(grep -i "PassengerNode" "$PUBLIC_HTML/.htaccess" | head -n 1 || true)
+    fi
+    
+    # Trim leading/trailing whitespace
+    PASSENGER_NODE_LINE=$(echo "$PASSENGER_NODE_LINE" | xargs || true)
+    
     HTACCESS_CONTENT="# ===================================================
 # Tribal Coffee Production Routing Configuration
 # Routing all traffic via Phusion Passenger Node.js app
@@ -115,7 +128,8 @@ if [ "$IS_NODE_BACKEND" = true ]; then
     PassengerAppRoot \"/home/backlzaj/tribalcoffee-v2/backend\"
     PassengerBaseURI \"/\"
     PassengerAppType \"node\"
-    PassengerStartupFile \"server.js\"
+    PassengerStartupFile \"app.cjs\"
+    $PASSENGER_NODE_LINE
 </IfModule>
 
 # Rewrite fallback for SPA routing and API proxying
@@ -129,7 +143,6 @@ RewriteRule . /index.html [L]"
     echo "$HTACCESS_CONTENT" > "$PUBLIC_HTML/.htaccess"
     
     # Write .htaccess to test subdomain
-    SUBDOMAIN_PATH="$PUBLIC_HTML/test.tribalcoffee.in"
     if [ -d "$SUBDOMAIN_PATH" ]; then
         echo "$HTACCESS_CONTENT" > "$SUBDOMAIN_PATH/.htaccess"
     fi
