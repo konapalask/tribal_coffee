@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export REPO_PATH=/home/backlzaj/tribalcoffee-v2
+    - /bin/bash $REPO_PATH/deploy.sh
