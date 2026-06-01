@@ -1,17 +1,19 @@
 #!/bin/bash
 
-# ==========================================
-# Namecheap cPanel Git Deployment Script
-# Framework Detection & Deployment Engine
-# ==========================================
+# ===================================================
+# Namecheap cPanel Git Deployment & Preservation Script
+# Multi-Framework (React/Vite, Node.js, Laravel)
+# ===================================================
 
-# Strict mode: Exit immediately if any command fails
+# Exit immediately if any command fails
 set -e
 
 # Target paths definition
 PUBLIC_HTML="/home/backlzaj/public_html"
-BACKEND_TARGET="/home/backlzaj/nodeapp"
 REPO_PATH="/home/backlzaj/tribalcoffee-v2"
+APP_ROOT="$REPO_PATH/backend"
+PERSISTENT_DATA="/home/backlzaj/persistent_data"
+PERSISTENT_UPLOADS="/home/backlzaj/persistent_uploads"
 
 echo "=== Deployment Started: $(date) ==="
 echo "Repository Path: $REPO_PATH"
@@ -40,57 +42,63 @@ fi
 if [ "$IS_VITE_REACT" = true ]; then
     echo "--- Building & Deploying React/Vite Frontend ---"
     
-    # Navigate to frontend folder
     cd "$REPO_PATH/frontend"
-    
-    # Install dependencies
     echo "Installing frontend dependencies..."
     npm install --production=false
     
-    # Compile production bundle
     echo "Building production assets..."
     npm run build
     
-    # Deploy dist contents to public_html (ensuring public_html exists)
     echo "Deploying built assets to public_html..."
     mkdir -p "$PUBLIC_HTML"
-    
-    # Sync dist folder to public_html cleanly (avoiding copying dist folder itself)
     /bin/cp -R dist/* "$PUBLIC_HTML/"
     
     echo "✔ React/Vite Frontend successfully deployed!"
 fi
 
-# 3. Deploy Node.js Backend
+# 3. Deploy Node.js Backend with Data Preservation
 if [ "$IS_NODE_BACKEND" = true ]; then
-    echo "--- Setting Up & Deploying Node.js Backend ---"
+    echo "--- Deploying Node.js Backend (Phusion Passenger) ---"
     
-    # Ensure backend target directory exists
-    mkdir -p "$BACKEND_TARGET"
+    # Ensure persistent volumes exist outside the git worktree
+    mkdir -p "$PERSISTENT_DATA"
+    mkdir -p "$PERSISTENT_UPLOADS"
     
-    # Navigate to backend source
-    cd "$REPO_PATH/backend"
+    # Navigate to app directory
+    cd "$APP_ROOT"
     
-    # Install backend production dependencies
-    echo "Installing backend dependencies..."
-    npm install --only=production
-    
-    # Deploy backend codebase to the designated cPanel Node.js directory
-    echo "Deploying codebase to live application server..."
-    # Copy all files from backend except lock files and node_modules (to avoid performance hit)
-    rsync -av --exclude='node_modules' --exclude='.git' "$REPO_PATH/backend/" "$BACKEND_TARGET/"
-    
-    # Copy node_modules separately if needed or link them
-    if [ -d "node_modules" ]; then
-        rsync -av "node_modules/" "$BACKEND_TARGET/node_modules/"
+    # 3.1 Preserve Local JSON Database Data
+    echo "Safeguarding database records (data/)..."
+    if [ -d "data" ] && [ ! -L "data" ]; then
+        # Seed persistent directory with fresh json data if new
+        cp -R data/* "$PERSISTENT_DATA/" || true
+        rm -rf data
+    fi
+    if [ ! -L "data" ]; then
+        ln -s "$PERSISTENT_DATA" "data"
     fi
     
-    # Prepare production startup & restart Node app (Passenger restart mechanism)
-    echo "Triggering zero-downtime application restart..."
-    mkdir -p "$BACKEND_TARGET/tmp"
-    touch "$BACKEND_TARGET/tmp/restart.txt"
+    # 3.2 Preserve User Uploads Media
+    echo "Safeguarding user media uploads (public/uploads/)..."
+    mkdir -p "public"
+    if [ -d "public/uploads" ] && [ ! -L "public/uploads" ]; then
+        cp -R public/uploads/* "$PERSISTENT_UPLOADS/" || true
+        rm -rf public/uploads
+    fi
+    if [ ! -L "public/uploads" ]; then
+        ln -s "$PERSISTENT_UPLOADS" "public/uploads"
+    fi
     
-    echo "✔ Node.js Backend successfully deployed & restarted!"
+    # 3.3 Install Production Dependencies
+    echo "Installing production node dependencies..."
+    npm install --only=production
+    
+    # 3.4 Trigger Hot Restart (Passenger)
+    echo "Triggering zero-downtime Passenger restart..."
+    mkdir -p "tmp"
+    touch "tmp/restart.txt"
+    
+    echo "✔ Node.js Backend successfully deployed and hot-restarted!"
 fi
 
 # 4. Deploy Laravel Framework
@@ -98,18 +106,14 @@ if [ "$IS_LARAVEL" = true ]; then
     echo "--- Deploying Laravel Application ---"
     
     cd "$REPO_PATH"
-    
-    # Install dependencies via Composer
     echo "Installing composer packages..."
     composer install --no-dev --optimize-autoloader
     
-    # Cache Configuration, Routes, and Views for production speed
     echo "Optimizing application cache..."
     php artisan config:cache
     php artisan route:cache
     php artisan view:cache
     
-    # Sync public assets to public_html
     echo "Deploying public assets to public_html..."
     mkdir -p "$PUBLIC_HTML"
     rsync -av public/ "$PUBLIC_HTML/"
