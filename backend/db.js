@@ -9,7 +9,15 @@ const UserSchema = new mongoose.Schema({
   salt: { type: String }, // Optional OpenCart password salt
   role: { type: String, required: true, default: 'Connoisseur' },
   address: { type: mongoose.Schema.Types.Mixed }, // Mixed type supporting custom JSON objects or address strings
-  phone: { type: String } // Customer contact number
+  phone: { type: String }, // Customer contact number
+  status: { type: String, default: 'Unverified Registration' }, // Verified Customer, Unverified Registration
+  orderCount: { type: Number, default: 0 }, // Customer order count
+  totalSpend: { type: Number, default: 0 }, // Total spend by customer
+  lastOrderDate: { type: String }, // Date of last order
+  shippingAddress: { type: String }, // Mapped shipping address
+  billingAddress: { type: String }, // Mapped billing address
+  dateAdded: { type: String }, // Original registration date
+  auditStatus: { type: String } // Traceability audit status: Original Customer Record vs Recovered From Order History
 }, { timestamps: true });
 
 // 2. Product Schema

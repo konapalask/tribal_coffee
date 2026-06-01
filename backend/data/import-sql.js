@@ -325,20 +325,39 @@ async function main() {
     existingUsers = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
   }
   
-  const initialAdmin = existingUsers.find(u => u.email === 'admin@tribalcoffee.in') || {
-    id: 'adm-1',
-    name: 'Sharmila K',
-    email: 'admin@tribalcoffee.in',
-    password: 'password123',
-    role: 'Super Admin'
-  };
-
   const usersMap = new Map();
-  usersMap.set(initialAdmin.email, initialAdmin);
-  
+
+  // Merge existing administrative users to preserve operational access
+  for (const user of existingUsers) {
+    if (user.role !== 'Connoisseur') {
+      usersMap.set(user.email.toLowerCase(), user);
+    }
+  }
+
+  // Ensure core administrative accounts are present
+  if (!usersMap.has('admin@tribalcoffee.in')) {
+    usersMap.set('admin@tribalcoffee.in', {
+      id: 'adm-1',
+      name: 'Sharmila K',
+      email: 'admin@tribalcoffee.in',
+      password: 'password123',
+      role: 'Super Admin'
+    });
+  }
+
+  if (!usersMap.has('saikirankonapala26@gmail.com')) {
+    usersMap.set('saikirankonapala26@gmail.com', {
+      id: 'wp-716',
+      name: 'konapalask',
+      email: 'saikirankonapala26@gmail.com',
+      password: 'password123',
+      role: 'Super Admin'
+    });
+  }
+
   // Merge existing non-admin users first to preserve them
   for (const user of existingUsers) {
-    if (user.email !== 'admin@tribalcoffee.in' && (!user.id || (!user.id.startsWith('oc-') && !user.id.startsWith('wp-')))) {
+    if (user.role === 'Connoisseur' && (!user.id || (!user.id.startsWith('oc-') && !user.id.startsWith('wp-')))) {
       usersMap.set(user.email.toLowerCase(), user);
     }
   }

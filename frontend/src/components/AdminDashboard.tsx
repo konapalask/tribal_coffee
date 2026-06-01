@@ -4,7 +4,7 @@ import {
   Lock, Trash2, Edit3, X, ChevronRight,
   TrendingUp, Layers, Send, Truck, FileText, PlusCircle, LogOut,
   Users, CheckCircle2, UserPlus, Search, AlertCircle,
-  HelpCircle, Shield, RefreshCw
+  HelpCircle, Shield, RefreshCw, Database, ShieldAlert
 } from 'lucide-react';
 import {
   TRIBAL_PRODUCTS, addProduct, updateProduct, deleteProduct,
@@ -58,7 +58,19 @@ interface AdminUser {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [adminName, setAdminName] = useState(loggedInUser?.name || 'Sharmila K');
   // General navigation
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'shiprocket' | 'chat' | 'admins'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'customers' | 'shiprocket' | 'chat' | 'admins' | 'audit'>('analytics');
+
+  // Sidebar collapsible state with localStorage persistence
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => localStorage.getItem('admin_sidebar_collapsed') === 'true');
+
+  // Slide-out customer details drawer state
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+
+  // Customer registry pagination and filtering
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerStatusFilter, setCustomerStatusFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+  const [customerPage, setCustomerPage] = useState(1);
+  const customersPerPage = 7;
 
   // Product CRUD states
   const [productsList, setProductsList] = useState<RealProduct[]>([...TRIBAL_PRODUCTS]);
@@ -88,9 +100,7 @@ interface AdminUser {
   const [formGlowColor, setFormGlowColor] = useState('rgba(74, 44, 29, 0.45)');
 
   // Shiprocket states
-  const [shipments, setShipments] = useState<ShipmentOrder[]>([
-    { id: 'TRB-8729', customerName: 'Aravind Swamy', email: 'aravind@gmail.com', city: 'Hyderabad', pincode: '500001', productName: 'Just Arabica Coffee Beans', amount: 449, status: 'Dispatched', awb: 'SR99201948', courier: 'Delhivery Express' }
-  ]);
+  const [shipments, setShipments] = useState<ShipmentOrder[]>([]);
   const [calcSource, setCalcSource] = useState('530003'); // Visakhapatnam Araku dispatch hub
   const [calcDest, setCalcDest] = useState('560001'); // Bengaluru central hub
   const [calcWeight, setCalcWeight] = useState('0.5'); // kg
@@ -181,9 +191,102 @@ interface AdminUser {
   const powderPercent = totalQty > 0 ? Math.round((powderQty / totalQty) * 100) : 0;
   const specialtyPercent = totalQty > 0 ? Math.round((specialtyQty / totalQty) * 100) : 0;
 
-  // Synchronize Super Admin name in admins list with adminName
+  // --- Dynamic Customer Growth & Product Progression Redesign Mappings ---
+  const customerGrowthData = React.useMemo(() => {
+    const monthlyCounts = Array(6).fill(0); // Jan to Jun
+    registeredUsers.forEach(u => {
+      if (u.dateAdded) {
+        const parts = u.dateAdded.split('/');
+        let month = -1;
+        if (parts.length >= 2) {
+          month = parseInt(parts[1], 10) - 1;
+        } else {
+          const dashParts = u.dateAdded.split('-');
+          if (dashParts.length >= 2) {
+            month = parseInt(dashParts[1], 10) - 1;
+          }
+        }
+        if (month >= 0 && month < 6) {
+          monthlyCounts[month] += 1;
+        }
+      }
+    });
+
+    const cumulative = [];
+    let runningSum = 0;
+    for (let i = 0; i < 6; i++) {
+      runningSum += monthlyCounts[i];
+      cumulative.push(runningSum);
+    }
+    return cumulative;
+  }, [registeredUsers]);
+
+  const topProductsList = React.useMemo(() => {
+    const counts: { [key: string]: number } = {};
+    shipments.forEach(s => {
+      if (s.productName) {
+        const items = s.productName.split(',');
+        items.forEach(item => {
+          const cleanItem = item.trim();
+          const qtyMatch = cleanItem.match(/x(\d+)/) || cleanItem.match(/\((\d+)\)/);
+          let qty = 1;
+          if (qtyMatch) {
+            qty = parseInt(qtyMatch[1], 10);
+          }
+          const name = cleanItem.replace(/\(x\d+\)/, '').replace(/\(x\s*\d+\)/, '').replace(/x\d+/, '').replace(/\(\d+\)/, '').trim();
+          if (name) {
+            counts[name] = (counts[name] || 0) + qty;
+          }
+        });
+      }
+    });
+
+    const list = Object.entries(counts).map(([name, qty]) => ({
+      name,
+      quantity: qty
+    })).sort((a, b) => b.quantity - a.quantity);
+
+    return list.slice(0, 4);
+  }, [shipments]);
+
+  const getGrowthSplinePaths = () => {
+    const maxVal = Math.max(...customerGrowthData, 10);
+    const points = customerGrowthData.map((val, idx) => {
+      const x = idx * 120;
+      const y = 220 - ((val / maxVal) * 180);
+      return { x, y };
+    });
+    
+    let path = '';
+    if (points.length > 0) {
+      path = `M ${points[0].x},${points[0].y}`;
+      for (let i = 0; i < points.length - 1; i++) {
+        const cpX1 = points[i].x + 40;
+        const cpY1 = points[i].y;
+        const cpX2 = points[i + 1].x - 40;
+        const cpY2 = points[i + 1].y;
+        path += ` C ${cpX1},${cpY1} ${cpX2},${cpY2} ${points[i + 1].x},${points[i + 1].y}`;
+      }
+    }
+    const areaPath = `${path} L 600,240 L 0,240 Z`;
+    return { growthLinePath: path, growthAreaPath: areaPath };
+  };
+
+  const { growthLinePath, growthAreaPath } = getGrowthSplinePaths();
+
+  // Synchronize Super Admin name in admins list and load luxurious fonts
   useEffect(() => {
     setAdmins(prev => prev.map(a => a.email.toLowerCase() === 'admin@tribalcoffee.in' ? { ...a, name: adminName } : a));
+    
+    // Inject luxurious Google Fonts families Playfair Display & Inter
+    const playfairLink = document.createElement('link');
+    playfairLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap';
+    playfairLink.rel = 'stylesheet';
+    document.head.appendChild(playfairLink);
+    
+    return () => {
+      document.head.removeChild(playfairLink);
+    };
   }, [adminName]);
 
   useEffect(() => {
@@ -561,6 +664,58 @@ interface AdminUser {
     setAdmins(prev => prev.map(a => a.email.toLowerCase() === 'admin@tribalcoffee.in' ? { ...a, name: adminName } : a));
   }, [adminName]);
 
+  const toggleSidebar = () => {
+    const newState = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newState);
+    localStorage.setItem('admin_sidebar_collapsed', String(newState));
+  };
+
+  const handleUpdateUserStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        setRegisteredUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u));
+      }
+    } catch (e) {
+      console.error('Failed to update user status:', e);
+    }
+  };
+
+  const filteredCustomers = React.useMemo(() => {
+    return registeredUsers.filter(u => {
+      const nameMatch = (u.name || '').toLowerCase().includes(customerSearchQuery.toLowerCase());
+      const emailMatch = (u.email || '').toLowerCase().includes(customerSearchQuery.toLowerCase());
+      const phoneMatch = (u.phone || '').toLowerCase().includes(customerSearchQuery.toLowerCase());
+      
+      const matchesSearch = nameMatch || emailMatch || phoneMatch;
+
+      let matchesStatus = true;
+      if (customerStatusFilter === 'verified') {
+        matchesStatus = u.status === 'Verified Customer';
+      } else if (customerStatusFilter === 'unverified') {
+        matchesStatus = u.status !== 'Verified Customer';
+      }
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [registeredUsers, customerSearchQuery, customerStatusFilter]);
+
+  const paginatedCustomers = React.useMemo(() => {
+    const startIndex = (customerPage - 1) * customersPerPage;
+    return filteredCustomers.slice(startIndex, startIndex + customersPerPage);
+  }, [filteredCustomers, customerPage]);
+
+  const totalCustomerPages = Math.ceil(filteredCustomers.length / customersPerPage);
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [customerSearchQuery, customerStatusFilter]);
+
   const handleDeleteAdmin = async (id: string) => {
     const targetAdmin = admins.find(a => a.id === id);
     if (!targetAdmin) return;
@@ -708,43 +863,258 @@ interface AdminUser {
 
       {/* 2. ADMIN DASHBOARD WORKSPACE */}
       {isAuthenticated && (
-        <div className="w-full max-w-[1550px] px-4 md:px-8 py-6 md:py-10 flex flex-col gap-6 md:gap-8 flex-grow">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-warm-gold/15">
-            <div className="flex items-center gap-4 text-left">
-              <div className="p-3 bg-warm-gold/15 border border-warm-gold/20 rounded-2xl text-warm-gold">
-                <Shield size={24} className="stroke-[1.5]" />
+        <div className="w-full flex h-screen overflow-hidden bg-[#050505] text-white relative font-sans">
+          
+          {/* Ambient lighting effects */}
+          <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full filter blur-[150px] bg-[#D4AF37]/5 pointer-events-none" />
+          <div className="absolute bottom-[-15%] right-[-10%] w-[600px] h-[600px] rounded-full filter blur-[180px] bg-[#D4AF37]/3 pointer-events-none" />
+          <div className="absolute top-[40%] right-[10%] w-[400px] h-[400px] rounded-full filter blur-[130px] bg-[#F4E2B8]/2 pointer-events-none" />
+
+          {/* 1. COLLAPSIBLE SIDEBAR */}
+          <aside 
+            className={`shrink-0 border-r border-[#D4AF37]/15 bg-[#0D0D0D] flex flex-col justify-between h-full sticky top-0 transition-all duration-300 z-30 ${
+              isSidebarCollapsed ? 'w-20' : 'w-80'
+            }`}
+          >
+            {/* Sidebar Top: Brand */}
+            <div>
+              <div className={`p-6 border-b border-[#D4AF37]/15 flex items-center justify-between ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+                {!isSidebarCollapsed && (
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-[#D4AF37]/10 border border-[#D4AF37]/20 rounded-xl text-[#D4AF37]">
+                      <Shield size={20} className="stroke-[1.5]" />
+                    </div>
+                    <div className="text-left">
+                      <span className="text-[9px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block">
+                        Tribal Coffee
+                      </span>
+                      <span className="text-xs font-playfair font-bold text-white block -mt-0.5">
+                        Lounge Admin
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {isSidebarCollapsed && (
+                  <div className="p-2 bg-[#D4AF37]/10 border border-[#D4AF37]/20 rounded-xl text-[#D4AF37]" title="Tribal Lounge Vault">
+                    <Shield size={20} className="stroke-[1.5]" />
+                  </div>
+                )}
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-warm-gold uppercase">
-                    Tribal Coffee Lounge Portal
-                  </span>
-                  <span className="bg-emerald-950 border border-emerald-500/30 text-emerald-400 text-[8px] font-sans px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                    Connected
-                  </span>
+
+              {/* Sidebar Middle: Admin details */}
+              <div className="p-4 border-b border-[#D4AF37]/10">
+                <div className={`flex items-center gap-3 p-2 bg-[#050505]/60 border border-[#D4AF37]/10 rounded-2xl group relative ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#F4E2B8] text-[#050505] flex items-center justify-center font-playfair font-black text-sm shadow-[0_0_10px_rgba(212,175,55,0.4)] shrink-0 uppercase">
+                    {adminName ? adminName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'TC'}
+                  </div>
+                  {!isSidebarCollapsed && (
+                    <div className="flex-grow min-w-0 text-left">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-playfair font-bold text-xs truncate text-white" title={adminName}>{adminName}</h4>
+                        <button 
+                          onClick={async () => {
+                            const newName = prompt('Enter new Admin Name:', adminName);
+                            if (newName && newName.trim()) {
+                              const trimmed = newName.trim();
+                              setAdminName(trimmed);
+                              try {
+                                const res = await fetch(`${API_BASE_URL}/api/auth/users/update`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ email: 'admin@tribalcoffee.in', name: trimmed })
+                                });
+                                if (res.ok && setLoggedInUser) {
+                                  const data = await res.json();
+                                  setLoggedInUser(data.user);
+                                }
+                              } catch (e) {
+                                console.error('Failed to save admin name in backend:', e);
+                              }
+                            }
+                          }}
+                          className="text-gray-400 hover:text-[#D4AF37] transition-colors p-0.5 rounded cursor-pointer shrink-0"
+                          title="Edit Admin Name"
+                        >
+                          <Edit3 size={10} />
+                        </button>
+                      </div>
+                      <p className="text-[9px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest mt-0.5">Owner / Super Admin</p>
+                    </div>
+                  )}
                 </div>
-                <h1 className="text-2xl md:text-3xl font-playfair font-bold text-cream-latte mt-1">
-                  Administrator Control Center
-                </h1>
+              </div>
+
+              {/* Sidebar Menu options */}
+              <div className="p-4 flex flex-col gap-2">
+                {/* 1. Overview */}
+                <button
+                  onClick={() => setActiveTab('analytics')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'analytics'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Overview & Analytics"
+                >
+                  <div className="flex items-center gap-3">
+                    <TrendingUp size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Overview</span>}
+                  </div>
+                  {!isSidebarCollapsed && <ChevronRight size={14} className={activeTab === 'analytics' ? 'text-[#050505]' : 'text-gray-500'} />}
+                </button>
+
+                {/* 2. Product Database */}
+                <button
+                  onClick={() => setActiveTab('products')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'products'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Product Database"
+                >
+                  <div className="flex items-center gap-3">
+                    <Layers size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Products</span>}
+                  </div>
+                  {!isSidebarCollapsed && (
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-sans font-bold ${
+                      activeTab === 'products' ? 'bg-[#050505]/20 text-[#050505]' : 'bg-white/10 text-white'
+                    }`}>
+                      {productsList.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* 3. Connoisseurs */}
+                <button
+                  onClick={() => setActiveTab('customers')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'customers'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Registered Connoisseurs"
+                >
+                  <div className="flex items-center gap-3">
+                    <Users size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Connoisseurs</span>}
+                  </div>
+                  {!isSidebarCollapsed && (
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-sans font-bold ${
+                      activeTab === 'customers' ? 'bg-[#050505]/20 text-[#050505]' : 'bg-[#D4AF37]/10 text-[#D4AF37]'
+                    }`}>
+                      {registeredUsers.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* 4. Shiprocket */}
+                <button
+                  onClick={() => setActiveTab('shiprocket')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'shiprocket'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Shiprocket Logistics"
+                >
+                  <div className="flex items-center gap-3">
+                    <Truck size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Logistics</span>}
+                  </div>
+                  {!isSidebarCollapsed && (
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-sans font-bold uppercase tracking-wider ${
+                      activeTab === 'shiprocket' ? 'bg-[#050505]/20 text-[#050505]' : 'bg-[#D4AF37]/15 text-[#D4AF37]'
+                    }`}>
+                      Syncing
+                    </span>
+                  )}
+                </button>
+
+                {/* 5. Live Chat */}
+                <button
+                  onClick={() => setActiveTab('chat')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'chat'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Live Chat Desk"
+                >
+                  <div className="flex items-center gap-3">
+                    <Send size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Live Chat</span>}
+                  </div>
+                  {!isSidebarCollapsed && (
+                    <span className="bg-emerald-950 border border-emerald-500/30 text-emerald-400 text-[8px] font-sans px-2 py-0.5 rounded-full uppercase tracking-wider font-bold animate-pulse">
+                      Live
+                    </span>
+                  )}
+                </button>
+
+                {/* 6. Multi-Admin */}
+                <button
+                  onClick={() => setActiveTab('admins')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'admins'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Multi-Admin Control"
+                >
+                  <div className="flex items-center gap-3">
+                    <Shield size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Admin Hub</span>}
+                  </div>
+                  {!isSidebarCollapsed && <ChevronRight size={14} className={activeTab === 'admins' ? 'text-[#050505]' : 'text-gray-500'} />}
+                </button>
+
+                {/* 7. Data Restoration Audit */}
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'audit'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Data Integrity Audit"
+                >
+                  <div className="flex items-center gap-3">
+                    <Database size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Data Audit</span>}
+                  </div>
+                  {!isSidebarCollapsed && <ChevronRight size={14} className={activeTab === 'audit' ? 'text-[#050505]' : 'text-gray-500'} />}
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Sidebar Bottom: Toggle & Lock */}
+            <div className="p-4 border-t border-[#D4AF37]/15 flex flex-col gap-2">
+              {/* Collapse button */}
               <button
-                onClick={() => {
-                  if (confirm('Sync all storage matrices back to factory values?')) {
-                    resetDB();
-                    setProductsList([...TRIBAL_PRODUCTS]);
-                  }
-                }}
-                className="px-4 py-2.5 bg-cream-latte/5 hover:bg-cream-latte/15 border border-cream-latte/10 rounded-xl font-sans text-xs tracking-wider flex items-center gap-2 transition-colors cursor-pointer text-cream-latte/70 hover:text-cream-latte"
-                title="Reset local storage values to defaults"
+                onClick={toggleSidebar}
+                className="w-full p-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-sans text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                title={isSidebarCollapsed ? 'Expand Navigation' : 'Collapse Navigation'}
               >
-                <RefreshCw size={14} />
-                Reset Defaults
+                {isSidebarCollapsed ? <ChevronRight size={16} /> : <span className="uppercase text-[9px] tracking-widest font-bold">Collapse Sidebar</span>}
               </button>
-              
+
+              {/* Lock Vault */}
               <button
                 onClick={() => {
                   setIsAuthenticated(false);
@@ -752,357 +1122,453 @@ interface AdminUser {
                     setLoggedInUser(null);
                   }
                 }}
-                className="px-4 py-2.5 bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/45 rounded-xl font-sans text-xs text-red-300 tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+                className={`w-full p-3 rounded-xl transition-all cursor-pointer bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/40 text-red-300 font-sans text-xs flex items-center gap-2 ${
+                  isSidebarCollapsed ? 'justify-center' : 'justify-start'
+                }`}
+                title="Lock Vault"
               >
                 <LogOut size={14} />
-                Lock Vault
+                {!isSidebarCollapsed && <span className="font-bold uppercase tracking-wider text-[9px]">Lock Vault</span>}
               </button>
-
             </div>
-          </div>
+          </aside>
 
-          {/* MAIN GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* 2. MAIN LAYOUT AREA */}
+          <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#050505] relative z-10">
             
-            {/* LEFT COLUMN: NAVIGATION SIDEBAR */}
-            <div className="lg:col-span-3 flex flex-col gap-4 text-left">
-              <div className="glassmorphism border border-warm-gold/15 p-4 rounded-3xl">
-                <div className="flex items-center gap-3 p-3 bg-espresso/50 border border-warm-gold/10 rounded-2xl mb-4 group relative">
-                  <div className="w-10 h-10 rounded-full bg-warm-gold text-espresso flex items-center justify-center font-playfair font-black text-sm shadow-[0_0_10px_#D6B27A] shrink-0 uppercase">
-                    {adminName ? adminName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'TC'}
-                  </div>
-                  <div className="flex-grow min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-playfair font-bold text-xs truncate" title={adminName}>{adminName}</h4>
-                      <button 
-                        onClick={async () => {
-                          const newName = prompt('Enter new Admin Name:', adminName);
-                          if (newName && newName.trim()) {
-                            const trimmed = newName.trim();
-                            setAdminName(trimmed);
-                            try {
-                              const res = await fetch(`${API_BASE_URL}/api/auth/users/update`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ email: 'admin@tribalcoffee.in', name: trimmed })
-                              });
-                              if (res.ok && setLoggedInUser) {
-                                const data = await res.json();
-                                setLoggedInUser(data.user);
-                              }
-                            } catch (e) {
-                              console.error('Failed to save admin name in backend:', e);
-                            }
-                          }
-                        }}
-                        className="text-cream-latte/40 hover:text-warm-gold transition-colors p-0.5 rounded cursor-pointer shrink-0"
-                        title="Edit Admin Name"
-                      >
-                        <Edit3 size={10} />
-                      </button>
-                    </div>
-                    <p className="text-[9px] text-warm-gold font-sans font-bold uppercase tracking-widest mt-0.5">Owner / Super Admin</p>
-                  </div>
-                </div>                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => setActiveTab('analytics')}
-                    className={`w-full p-3.5 rounded-2xl flex items-center justify-between font-sans text-xs tracking-wider uppercase font-bold transition-all cursor-pointer ${
-                      activeTab === 'analytics'
-                        ? 'bg-warm-gold text-espresso shadow-[0_4px_16px_rgba(200,169,126,0.2)]'
-                        : 'bg-transparent text-cream-latte/70 hover:bg-cream-latte/5 hover:text-cream-latte'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <TrendingUp size={16} />
-                      Overview & Analytics
-                    </div>
-                    <ChevronRight size={14} />
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('products')}
-                    className={`w-full p-3.5 rounded-2xl flex items-center justify-between font-sans text-xs tracking-wider uppercase font-bold transition-all cursor-pointer ${
-                      activeTab === 'products'
-                        ? 'bg-warm-gold text-espresso shadow-[0_4px_16px_rgba(200,169,126,0.2)]'
-                        : 'bg-transparent text-cream-latte/70 hover:bg-cream-latte/5 hover:text-cream-latte'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Layers size={16} />
-                      Product Database
-                    </div>
-                    <span className="bg-cream-latte/15 px-2 py-0.5 rounded-md text-[9px] font-sans font-bold">
-                      {productsList.length}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('shiprocket')}
-                    className={`w-full p-3.5 rounded-2xl flex items-center justify-between font-sans text-xs tracking-wider uppercase font-bold transition-all cursor-pointer ${
-                      activeTab === 'shiprocket'
-                        ? 'bg-warm-gold text-espresso shadow-[0_4px_16px_rgba(200,169,126,0.2)]'
-                        : 'bg-transparent text-cream-latte/70 hover:bg-cream-latte/5 hover:text-cream-latte'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Truck size={16} />
-                      Shiprocket Logistics
-                    </div>
-                    <span className="bg-amber-950 text-warm-gold border border-warm-gold/25 px-2 py-0.5 rounded-md text-[9px] font-sans font-bold">
-                      Syncing
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('chat')}
-                    className={`w-full p-3.5 rounded-2xl flex items-center justify-between font-sans text-xs tracking-wider uppercase font-bold transition-all cursor-pointer ${
-                      activeTab === 'chat'
-                        ? 'bg-warm-gold text-espresso shadow-[0_4px_16px_rgba(200,169,126,0.2)]'
-                        : 'bg-transparent text-cream-latte/70 hover:bg-cream-latte/5 hover:text-cream-latte'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Send size={16} />
-                      Live Chat Desk
-                    </div>
-                    <span className="bg-emerald-950 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md text-[9px] font-sans font-bold animate-pulse">
-                      Live
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('admins')}
-                    className={`w-full p-3.5 rounded-2xl flex items-center justify-between font-sans text-xs tracking-wider uppercase font-bold transition-all cursor-pointer ${
-                      activeTab === 'admins'
-                        ? 'bg-warm-gold text-espresso shadow-[0_4px_16px_rgba(200,169,126,0.2)]'
-                        : 'bg-transparent text-cream-latte/70 hover:bg-cream-latte/5 hover:text-cream-latte'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Users size={16} />
-                      Multi-Admin Hub
-                    </div>
-                    <ChevronRight size={14} />
-                  </button>
+            {/* TOP NAVIGATION HEADER */}
+            <header className="h-20 shrink-0 border-b border-[#D4AF37]/15 bg-[#0D0D0D]/75 backdrop-blur-md flex items-center justify-between px-8 z-20">
+              
+              {/* Search component */}
+              <div className="flex items-center gap-4 text-left flex-1 max-w-md">
+                <div className="relative w-full">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search transactions, customers, or products..."
+                    value={activeTab === 'products' ? searchQuery : customerSearchQuery}
+                    onChange={(e) => {
+                      if (activeTab === 'products') {
+                        setSearchQuery(e.target.value);
+                      } else {
+                        setCustomerSearchQuery(e.target.value);
+                      }
+                    }}
+                    className="w-full pl-10 pr-4 py-2 bg-[#050505] border border-[#D4AF37]/15 rounded-xl font-sans text-xs focus:outline-none focus:border-[#D4AF37] text-white placeholder-gray-500 transition-colors"
+                  />
                 </div>
               </div>
-            </div>
 
-            {/* RIGHT COLUMN: WORKSPACE VIEWS */}
-            <div className="lg:col-span-9 w-full">
+              {/* Right tools: Notifications & dropdown info */}
+              <div className="flex items-center gap-6">
+                
+                {/* Reset Defaults button */}
+                <button
+                  onClick={() => {
+                    if (confirm('Sync all storage matrices back to factory values?')) {
+                      resetDB();
+                      setProductsList([...TRIBAL_PRODUCTS]);
+                    }
+                  }}
+                  className="px-4.5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-sans text-xs tracking-wider flex items-center gap-2 transition-all cursor-pointer text-gray-300 hover:text-white"
+                  title="Reset local storage values to defaults"
+                >
+                  <RefreshCw size={12} />
+                  <span className="hidden sm:inline font-bold uppercase tracking-wider text-[9px]">Reset Defaults</span>
+                </button>
+
+                {/* Notifications Bell */}
+                <div className="relative group cursor-pointer" title="System Alerts">
+                  <div className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-gray-300 hover:text-[#D4AF37] transition-all">
+                    <Shield size={16} className="stroke-[1.5]" />
+                  </div>
+                  {/* Glowing gold badge */}
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#D4AF37] rounded-full border border-[#0D0D0D] animate-pulse shadow-[0_0_8px_#D4AF37]" />
+                </div>
+
+                {/* Profile menu dropdown preview */}
+                <div className="flex items-center gap-3 border-l border-white/10 pl-6 text-left">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#D4AF37]/20 to-[#F4E2B8]/10 border border-[#D4AF37]/30 flex items-center justify-center font-playfair font-black text-xs text-[#D4AF37]">
+                    {adminName ? adminName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'TC'}
+                  </div>
+                  <div className="hidden md:block">
+                    <span className="font-playfair font-bold text-xs text-white block leading-tight">{adminName}</span>
+                    <span className="text-[8px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest block mt-0.5">Super Admin</span>
+                  </div>
+                </div>
+
+              </div>
+            </header>
+
+            {/* MAIN MAIN VIEWPORT VIEW */}
+            <main className="flex-grow overflow-y-auto p-6 md:p-8 relative">
               
               {/* TAB 1: OVERVIEW & ANALYTICS */}
               {activeTab === 'analytics' && (
-                <div className="flex flex-col gap-8 text-left">
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* Revenue Card */}
-                    <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-warm-gold/5 -z-10" />
-                      <span className="text-[10px] font-sans text-warm-gold uppercase tracking-[0.2em] font-bold block mb-1">Total Revenue</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">₹{totalRevenue.toLocaleString('en-IN')}</h3>
-                      <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>Based on historical bookings</span>
-                      </div>
+                <div className="flex flex-col gap-8 text-left max-w-7xl mx-auto pb-12">
+                  
+                  {/* Header title */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#D4AF37]/15">
+                    <div>
+                      <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block">
+                        Tribal Coffee Lounge Portal
+                      </span>
+                      <h1 className="text-2xl md:text-3xl font-playfair font-bold text-white mt-1">
+                        Overview & Analytics Matrix
+                      </h1>
                     </div>
-
-                    {/* Orders Card */}
-                    <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-bean/10 -z-10" />
-                      <span className="text-[10px] font-sans text-cream-latte/50 uppercase tracking-[0.2em] font-bold block mb-1">Total Orders</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">{totalOrders} Sales</h3>
-                      <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>Orders logged in system</span>
-                      </div>
-                    </div>
-
-                    {/* Avg Value Card */}
-                    <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-warm-gold/5 -z-10" />
-                      <span className="text-[10px] font-sans text-warm-gold uppercase tracking-[0.2em] font-bold block mb-1">Average Order</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">₹{Math.round(averageOrderValue)}</h3>
-                      <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>Average ticket size per order</span>
-                      </div>
-                    </div>
-
-                    {/* Active Dispatch Card */}
-                    <div className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-24 h-24 rounded-full filter blur-[40px] bg-emerald-500/5 -z-10" />
-                      <span className="text-[10px] font-sans text-cream-latte/50 uppercase tracking-[0.2em] font-bold block mb-1">Active Shipments</span>
-                      <h3 className="font-bebas text-3xl md:text-4xl text-[#F8E8D2] tracking-wider leading-none">{activeShipmentsCount} Active</h3>
-                      <div className="flex items-center gap-1.5 mt-3 text-cream-latte/40 font-sans text-[11px]">
-                        <span>Awaiting dispatch actions</span>
-                      </div>
-                    </div>
+                    <span className="bg-emerald-950 border border-emerald-500/30 text-emerald-400 text-[9px] font-sans px-3 py-1 rounded-full uppercase tracking-wider font-bold shrink-0 self-start md:self-auto">
+                      Connected Live
+                    </span>
                   </div>
-                  {/* Dynamic Custom Charting (Line & Donut SVGs) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+                  {/* 5 Statistics cards styled like Stripe / Shopify */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     
-                    {/* Line Chart */}
-                    <div className="lg:col-span-8 glassmorphism border border-warm-gold/15 p-6 rounded-[30px] flex flex-col justify-between">
+                    {/* Stat 1: Gross Revenue */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between shadow-xl min-h-[130px]">
+                      <div className="absolute top-[-30px] right-[-30px] w-20 h-20 rounded-full filter blur-[25px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <div>
+                        <div className="flex justify-between items-center text-gray-500 font-sans text-[10px] font-bold uppercase tracking-wider mb-2">
+                          <span>Gross Revenue</span>
+                          <TrendingUp size={12} className="text-[#D4AF37]" />
+                        </div>
+                        <h3 className="font-sans text-2xl font-semibold text-white tracking-tight">
+                          ₹{totalRevenue.toLocaleString('en-IN')}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-gray-500 mt-3">
+                        <span className="font-normal">{totalOrders > 0 ? `${totalOrders} bookings total` : 'No bookings yet'}</span>
+                      </div>
+                    </div>
+
+                    {/* Stat 2: Volume Sales */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between shadow-xl min-h-[130px]">
+                      <div className="absolute top-[-30px] right-[-30px] w-20 h-20 rounded-full filter blur-[25px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <div>
+                        <div className="flex justify-between items-center text-gray-500 font-sans text-[10px] font-bold uppercase tracking-wider mb-2">
+                          <span>Volume Sales</span>
+                          <Layers size={12} className="text-gray-400" />
+                        </div>
+                        <h3 className="font-sans text-2xl font-semibold text-white tracking-tight">
+                          {totalOrders} Bookings
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-gray-500 mt-3">
+                        <span className="font-normal">{activeShipmentsCount} pending dispatch</span>
+                      </div>
+                    </div>
+
+                    {/* Stat 3: Average Order Value */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between shadow-xl min-h-[130px]">
+                      <div className="absolute top-[-30px] right-[-30px] w-20 h-20 rounded-full filter blur-[25px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <div>
+                        <div className="flex justify-between items-center text-gray-500 font-sans text-[10px] font-bold uppercase tracking-wider mb-2">
+                          <span>Average Order</span>
+                          <TrendingUp size={12} className="text-[#D4AF37]" />
+                        </div>
+                        <h3 className="font-sans text-2xl font-semibold text-white tracking-tight">
+                          {totalOrders > 0 ? `₹${Math.round(averageOrderValue)}` : '—'}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-gray-500 mt-3">
+                        <span className="font-normal">{totalOrders > 0 ? 'per booking avg' : 'No orders yet'}</span>
+                      </div>
+                    </div>
+
+                    {/* Stat 4: Verified Connoisseurs */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between shadow-xl min-h-[130px]">
+                      <div className="absolute top-[-30px] right-[-30px] w-20 h-20 rounded-full filter blur-[25px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <div>
+                        <div className="flex justify-between items-center text-gray-500 font-sans text-[10px] font-bold uppercase tracking-wider mb-2">
+                          <span>Connoisseurs</span>
+                          <Users size={12} className="text-gray-400" />
+                        </div>
+                        <h3 className="font-sans text-2xl font-semibold text-white tracking-tight">
+                          {registeredUsers.filter(u => u.status === 'Verified Customer').length} Verified
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-gray-500 mt-3">
+                        <span className="font-bold text-gray-400">{registeredUsers.length} total</span>
+                        <span>registrations logged</span>
+                      </div>
+                    </div>
+
+                    {/* Stat 5: Active Shipments */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between shadow-xl min-h-[130px]">
+                      <div className="absolute top-[-30px] right-[-30px] w-20 h-20 rounded-full filter blur-[25px] bg-emerald-500/5 pointer-events-none" />
+                      <div>
+                        <div className="flex justify-between items-center text-gray-500 font-sans text-[10px] font-bold uppercase tracking-wider mb-2">
+                          <span>Active Shipments</span>
+                          <Truck size={12} className="text-emerald-400 animate-pulse" />
+                        </div>
+                        <h3 className="font-sans text-2xl font-semibold text-white tracking-tight">
+                          {activeShipmentsCount} Pending
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-emerald-400 mt-3">
+                        <span className="bg-emerald-950/45 px-1.5 py-0.5 rounded font-bold">Live sync</span>
+                        <span className="text-gray-500 font-normal">awaiting AWB</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* 2X2 GRID OF 4 HIGH-FIDELITY CUSTOM SVG CHARTS */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    {/* Chart 1: Revenue Performance Chart (Bezier Spline Area) */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-3xl flex flex-col justify-between shadow-xl">
                       <div>
                         <div className="flex items-center justify-between mb-6">
                           <div>
-                            <span className="text-[10px] font-sans text-warm-gold uppercase tracking-widest font-bold">Monthly Sales Performance</span>
-                            <h4 className="font-playfair font-bold text-xl text-cream-latte mt-1">Revenue Matrix (₹)</h4>
+                            <span className="text-[9px] font-sans text-[#D4AF37] uppercase tracking-widest font-bold">Monthly Sales Performance</span>
+                            <h4 className="font-playfair font-bold text-lg text-white mt-1">Revenue Matrix (₹)</h4>
                           </div>
-                          <span className="bg-warm-gold/15 border border-warm-gold/20 text-warm-gold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider font-bold">
-                            Year 2026
+                          <span className="bg-[#D4AF37]/10 border border-[#D4AF37]/20 text-[#D4AF37] text-[9px] px-3 py-1 rounded-full uppercase tracking-wider font-bold">
+                            Current Year
                           </span>
                         </div>
-                        {/* Interactive Responsive SVG Area Chart */}
-                        <div className="h-64 w-full relative">
+
+                        {/* Bezier Path Area SVG */}
+                        <div className="h-56 w-full relative">
                           <svg className="w-full h-full" viewBox="0 0 600 240" preserveAspectRatio="none">
                             <defs>
-                              <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#D6B27A" stopOpacity="0.15" />
-                                <stop offset="100%" stopColor="#D6B27A" stopOpacity="0" />
+                              <linearGradient id="revenueGlowGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#D4AF37" stopOpacity="0.2" />
+                                <stop offset="100%" stopColor="#D4AF37" stopOpacity="0" />
                               </linearGradient>
                             </defs>
                             
                             {/* Grid Lines */}
-                            <line x1="0" y1="60" x2="600" y2="60" stroke="rgba(214,178,122,0.08)" strokeDasharray="5,5" />
-                            <line x1="0" y1="120" x2="600" y2="120" stroke="rgba(214,178,122,0.08)" strokeDasharray="5,5" />
-                            <line x1="0" y1="180" x2="600" y2="180" stroke="rgba(214,178,122,0.08)" strokeDasharray="5,5" />
+                            <line x1="0" y1="60" x2="600" y2="60" stroke="rgba(212,175,55,0.08)" strokeDasharray="5,5" />
+                            <line x1="0" y1="120" x2="600" y2="120" stroke="rgba(212,175,55,0.08)" strokeDasharray="5,5" />
+                            <line x1="0" y1="180" x2="600" y2="180" stroke="rgba(212,175,55,0.08)" strokeDasharray="5,5" />
                             
-                            {/* SVG Path Area */}
-                            <path
-                              d={areaPath}
-                              fill="url(#chartGrad)"
-                            />
-
-                            {/* SVG Line path */}
-                            <path
-                              d={linePath}
-                              fill="none"
-                              stroke="rgba(214,178,122,0.3)"
-                              strokeWidth="2.5"
-                              strokeLinecap="round"
-                            />
+                            {/* Line path filled */}
+                            <path d={areaPath} fill="url(#revenueGlowGrad)" />
+                            
+                            {/* SVG Line stroke */}
+                            <path d={linePath} fill="none" stroke="#D4AF37" strokeWidth="2.5" strokeLinecap="round" />
                           </svg>
 
-                          {/* Chart Tooltip Overlay */}
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-espresso/95 border border-warm-gold/20 p-4 rounded-2xl text-[10px] font-sans uppercase tracking-[0.2em] text-center shadow-2xl backdrop-blur-md">
-                            <span className="text-warm-gold block font-bold mb-1">Peak Sales (May)</span>
-                            <span className="text-cream-latte/50 block font-normal text-[8px] tracking-wide normal-case mt-1">May sales logged: ₹{monthlyRevenue[4].toLocaleString('en-IN')}</span>
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0D0D0D]/95 border border-[#D4AF37]/30 p-4 rounded-xl text-[10px] font-sans uppercase tracking-[0.2em] text-center shadow-2xl backdrop-blur-md">
+                            <span className="text-[#D4AF37] block font-bold mb-1">Peak Sales Month</span>
+                            <span className="text-gray-400 block font-normal text-[8px] tracking-wide normal-case mt-1">Highest: May sales registered</span>
                           </div>
-                        </div>                      </div>
+                        </div>
+                      </div>
 
                       {/* X-Axis labels */}
-                      <div className="flex justify-between items-center px-2 mt-4 text-[10px] text-cream-latte/45 tracking-widest uppercase font-bold">
+                      <div className="flex justify-between items-center px-2 mt-4 text-[9px] text-gray-500 tracking-widest uppercase font-bold">
                         <span>Jan</span>
                         <span>Feb</span>
                         <span>Mar</span>
                         <span>Apr</span>
-                        <span>May (Current)</span>
+                        <span>May</span>
+                        <span>Jun</span>
                       </div>
                     </div>
-                    {/* Donut Chart */}
-                    <div className="lg:col-span-4 glassmorphism border border-warm-gold/15 p-6 rounded-[30px] flex flex-col justify-between">
+
+                    {/* Chart 2: Dispatched Orders Columns Chart */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-3xl flex flex-col justify-between shadow-xl">
                       <div>
-                        <span className="text-[10px] font-sans text-warm-gold uppercase tracking-widest font-bold block mb-1">Volume by Blend</span>
-                        <h4 className="font-playfair font-bold text-lg text-cream-latte">Category Sales</h4>
-                        
-                        <div className="relative w-36 h-36 mx-auto my-8 flex items-center justify-center">
-                          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                            {/* Empty Track */}
-                            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(214,178,122,0.08)" strokeWidth="8" />
+                        <div className="flex items-center justify-between mb-6">
+                          <div>
+                            <span className="text-[9px] font-sans text-gray-400 uppercase tracking-widest font-bold">Sales Dispatches</span>
+                            <h4 className="font-playfair font-bold text-lg text-white mt-1">Dispatched Orders Column Chart</h4>
+                          </div>
+                          <span className="bg-emerald-950/45 border border-emerald-500/20 text-emerald-400 text-[9px] px-3 py-1 rounded-full uppercase tracking-wider font-bold">
+                            Live Shipments
+                          </span>
+                        </div>
+
+                        {/* Column bar chart */}
+                        <div className="h-56 w-full relative flex items-end justify-between px-4 pb-2">
+                          {(() => {
+                            // Calculate monthly shipments
+                            const monthlyOrders = Array(6).fill(0);
+                            shipments.forEach(s => {
+                              if (s.date) {
+                                const slashParts = s.date.split('/');
+                                let month = -1;
+                                if (slashParts.length >= 2) {
+                                  month = parseInt(slashParts[1], 10) - 1;
+                                } else {
+                                  const dashParts = s.date.split('-');
+                                  if (dashParts.length >= 2) {
+                                    month = parseInt(dashParts[1], 10) - 1;
+                                  }
+                                }
+                                if (month >= 0 && month < 6) {
+                                  monthlyOrders[month] += 1;
+                                }
+                              }
+                            });
                             
-                            {/* Beans Segment */}
-                            {beansPercent > 0 && (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="none"
-                                stroke="#D6B27A"
-                                strokeWidth="8"
-                                strokeDasharray={`${(beansPercent / 100) * 251.2} 251.2`}
-                                strokeDashoffset="0"
-                              />
-                            )}
+                            const maxOrd = Math.max(...monthlyOrders, 4);
                             
-                            {/* Powder Segment */}
-                            {powderPercent > 0 && (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="none"
-                                stroke="#8B5E3C"
-                                strokeWidth="8"
-                                strokeDasharray={`${(powderPercent / 100) * 251.2} 251.2`}
-                                strokeDashoffset={-((beansPercent / 100) * 251.2)}
-                              />
-                            )}
+                            return monthlyOrders.map((ord, idx) => {
+                              const heightPercent = Math.max((ord / maxOrd) * 100, 10);
+                              return (
+                                <div key={idx} className="flex flex-col items-center flex-1 group">
+                                  {/* Tooltip on hover */}
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 absolute top-2 bg-[#0D0D0D] border border-[#D4AF37]/30 text-white font-mono text-[10px] px-2 py-1 rounded shadow-lg pointer-events-none mb-1 z-10">
+                                    {ord} orders
+                                  </div>
+                                  <div className="w-8 md:w-12 bg-gradient-to-t from-[#D4AF37]/40 to-[#D4AF37] hover:from-[#F4E2B8] hover:to-[#D4AF37] rounded-t-lg transition-all duration-300 cursor-pointer shadow-[0_0_10px_rgba(212,175,55,0.1)] hover:shadow-[0_0_15px_rgba(212,175,55,0.3)]" style={{ height: `${heightPercent * 1.5}px` }} />
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* X-Axis labels */}
+                      <div className="flex justify-between items-center px-4 mt-4 text-[9px] text-gray-500 tracking-widest uppercase font-bold">
+                        <span>Jan</span>
+                        <span>Feb</span>
+                        <span>Mar</span>
+                        <span>Apr</span>
+                        <span>May</span>
+                        <span>Jun</span>
+                      </div>
+                    </div>
+
+                    {/* Chart 3: Customer Growth Spline Chart */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-3xl flex flex-col justify-between shadow-xl">
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <div>
+                            <span className="text-[9px] font-sans text-[#D4AF37] uppercase tracking-widest font-bold">Audience Demographics</span>
+                            <h4 className="font-playfair font-bold text-lg text-white mt-1">Customer Growth spline Chart</h4>
+                          </div>
+                          <span className="bg-[#D4AF37]/10 border border-[#D4AF37]/20 text-[#D4AF37] text-[9px] px-3 py-1 rounded-full uppercase tracking-wider font-bold">
+                            Cumulative
+                          </span>
+                        </div>
+
+                        {/* Customer growth curve */}
+                        <div className="h-56 w-full relative">
+                          <svg className="w-full h-full" viewBox="0 0 600 240" preserveAspectRatio="none">
+                            <defs>
+                              <linearGradient id="growthGlowGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#D4AF37" stopOpacity="0.15" />
+                                <stop offset="100%" stopColor="#D4AF37" stopOpacity="0" />
+                              </linearGradient>
+                            </defs>
                             
-                            {/* Specialty Segment */}
-                            {specialtyPercent > 0 && (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill="none"
-                                stroke="#4A2B1D"
-                                strokeWidth="8"
-                                strokeDasharray={`${(specialtyPercent / 100) * 251.2} 251.2`}
-                                strokeDashoffset={-(((beansPercent + powderPercent) / 100) * 251.2)}
-                              />
-                            )}
+                            {/* Grid lines */}
+                            <line x1="0" y1="60" x2="600" y2="60" stroke="rgba(212,175,55,0.08)" strokeDasharray="5,5" />
+                            <line x1="0" y1="120" x2="600" y2="120" stroke="rgba(212,175,55,0.08)" strokeDasharray="5,5" />
+                            <line x1="0" y1="180" x2="600" y2="180" stroke="rgba(212,175,55,0.08)" strokeDasharray="5,5" />
+                            
+                            {/* Spline Area path */}
+                            <path d={growthAreaPath} fill="url(#growthGlowGrad)" />
+                            
+                            {/* Spline Stroke path */}
+                            <path d={growthLinePath} fill="none" stroke="#D4AF37" strokeWidth="2.5" strokeLinecap="round" />
                           </svg>
-                          <div className="absolute text-center px-4">
-                            <span className="font-playfair font-bold text-xl text-[#F8E8D2] block">
-                              {totalOrders > 0 ? `${beansPercent}%` : '0%'}
-                            </span>
-                            <span className="text-[7px] font-sans text-cream-latte/45 tracking-wider uppercase block leading-tight">
-                              {totalOrders > 0 ? 'Araku Beans dominant' : 'No Sales Yet'}
-                            </span>
+
+                          <div className="absolute top-6 right-6 bg-[#0D0D0D] border border-white/10 px-3 py-1.5 rounded-lg text-right pointer-events-none">
+                            <span className="text-[8px] text-gray-500 block uppercase font-bold">Total registered</span>
+                            <span className="text-xs font-semibold text-white font-mono mt-0.5 block">{registeredUsers.length} Connoisseurs</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Donut Legend */}
-                      <div className="flex flex-col gap-2 font-sans text-[10px] uppercase tracking-widest font-bold text-cream-latte/50">
-                        <div className="flex items-center justify-between text-cream-latte">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-warm-gold" />
-                            <span>Araku Beans</span>
-                          </div>
-                          <span>{beansPercent}%</span>
-                        </div>
-                        <div className="flex items-center justify-between text-cream-latte">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#8B5E3C]" />
-                            <span>Fine/Coarse Powder</span>
-                          </div>
-                          <span>{powderPercent}%</span>
-                        </div>
-                        <div className="flex items-center justify-between text-cream-latte">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#4A2B1D]" />
-                            <span>Cold Brew / Special</span>
-                          </div>
-                          <span>{specialtyPercent}%</span>
-                        </div>
+                      {/* X-Axis labels */}
+                      <div className="flex justify-between items-center px-2 mt-4 text-[9px] text-gray-500 tracking-widest uppercase font-bold">
+                        <span>Jan</span>
+                        <span>Feb</span>
+                        <span>Mar</span>
+                        <span>Apr</span>
+                        <span>May</span>
+                        <span>Jun</span>
                       </div>
-                    </div>                  </div>
+                    </div>
+
+                    {/* Chart 4: Top Products Volume Progression Metrics */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-3xl flex flex-col justify-between shadow-xl text-left">
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <div>
+                            <span className="text-[9px] font-sans text-gray-400 uppercase tracking-widest font-bold">Inventory Despatch Rank</span>
+                            <h4 className="font-playfair font-bold text-lg text-white mt-1">Top Products Progression</h4>
+                          </div>
+                          <span className="bg-[#D4AF37]/10 border border-[#D4AF37]/20 text-[#D4AF37] text-[9px] px-3 py-1 rounded-full uppercase tracking-wider font-bold">
+                            By Volume
+                          </span>
+                        </div>
+
+                        {/* Progression bars */}
+                        {topProductsList.length > 0 ? (
+                          <div className="flex flex-col gap-5 py-2">
+                            {topProductsList.map((prod, index) => {
+                              const maxQty = Math.max(...topProductsList.map(p => p.quantity), 1);
+                              const percent = Math.round((prod.quantity / maxQty) * 100);
+                              return (
+                                <div key={index} className="flex flex-col gap-2">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="font-playfair font-bold text-white truncate max-w-[220px]">{prod.name}</span>
+                                    <span className="font-sans font-bold text-[#D4AF37]">{prod.quantity} Units Sold</span>
+                                  </div>
+                                  <div className="w-full bg-[#050505] h-2.5 rounded-full overflow-hidden border border-white/5 relative shadow-inner">
+                                    <motion.div
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${percent}%` }}
+                                      transition={{ duration: 1, delay: index * 0.1 }}
+                                      className="bg-gradient-to-r from-[#D4AF37] to-[#F4E2B8] h-full rounded-full"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <span className="text-gray-600 text-xs font-sans">No historical data available</span>
+                            <span className="text-gray-700 text-[10px] font-sans mt-1">Place orders to see product rankings</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-[9px] text-gray-500 font-sans tracking-wider text-center mt-4">
+                        Volume parsed dynamically from live Shipment registers.
+                      </div>
+                    </div>
+
+                  </div>
+
                 </div>
               )}
 
-              {/* TAB 2: PRODUCTS CRUD */}
+              {/* TAB 2: PRODUCTS DATABASE (CRUD) */}
               {activeTab === 'products' && (
-                <div className="flex flex-col gap-6 text-left">
+                <div className="flex flex-col gap-6 text-left max-w-7xl mx-auto pb-12">
+                  
+                  {/* Title block */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#D4AF37]/15">
+                    <div>
+                      <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block">
+                        Inventory Management
+                      </span>
+                      <h1 className="text-2xl md:text-3xl font-playfair font-bold text-white mt-1">
+                        Artisanal Product Database
+                      </h1>
+                    </div>
+                  </div>
+
                   {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-black/30 border border-cream-latte/5 p-4 rounded-2xl backdrop-blur-md">
+                  <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-[#0D0D0D]/60 border border-[#D4AF37]/15 p-4 rounded-2xl backdrop-blur-md">
                     <div className="relative w-full sm:max-w-xs">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-cream-latte/40" size={16} />
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                       <input
                         type="text"
-                        placeholder="Search products database..."
+                        placeholder="Search products in database..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-espresso/50 border border-cream-latte/10 rounded-xl font-sans text-xs focus:outline-none focus:border-warm-gold/50 text-cream-latte"
+                        className="w-full pl-10 pr-4 py-2 bg-[#050505] border border-white/10 rounded-xl font-sans text-xs focus:outline-none focus:border-[#D4AF37] text-white"
                       />
                     </div>
 
@@ -1110,18 +1576,18 @@ interface AdminUser {
                       <select
                         value={selectedCategoryFilter}
                         onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                        className="bg-espresso/50 border border-cream-latte/10 rounded-xl px-4 py-2 text-xs font-sans text-cream-latte focus:outline-none cursor-pointer"
+                        className="bg-[#050505] border border-white/10 rounded-xl px-4 py-2 text-xs font-sans text-white focus:outline-none cursor-pointer"
                       >
                         <option value="all">All Categories</option>
-                        <option value="beans">Organic Beans</option>
-                        <option value="powder">Ground Powder</option>
+                        <option value="beans">Whole Beans</option>
+                        <option value="powder">Organic Ground Powder</option>
                         <option value="filter">Filter Coffee</option>
-                        <option value="specialty">Specialty / Brews</option>
+                        <option value="specialty">Specialty Brews</option>
                       </select>
 
                       <button
                         onClick={handleOpenAddModal}
-                        className="px-5 py-2.5 bg-warm-gold text-espresso font-sans text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-cream-latte hover:text-espresso transition-colors cursor-pointer flex items-center gap-2 shadow-[0_4px_16px_rgba(200,169,126,0.15)]"
+                        className="px-5 py-2.5 bg-[#D4AF37] text-[#050505] font-sans text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-[#F4E2B8] transition-colors cursor-pointer flex items-center gap-2 shadow-lg"
                       >
                         <PlusCircle size={14} className="stroke-[2.5]" />
                         Add Product
@@ -1129,120 +1595,327 @@ interface AdminUser {
                     </div>
                   </div>
 
-                  {/* Products List Table */}
-                  <div className="glassmorphism border border-warm-gold/15 rounded-3xl overflow-hidden shadow-lg">
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="border-b border-warm-gold/10 text-[10px] text-warm-gold uppercase tracking-[0.2em] bg-espresso/60 font-bold">
-                            <th className="py-4 px-6 text-left">Product Details</th>
-                            <th className="py-4 px-6 text-left">Category</th>
-                            <th className="py-4 px-6 text-left">Roast & Blend</th>
-                            <th className="py-4 px-6 text-left">Price (₹)</th>
-                            <th className="py-4 px-6 text-center">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-warm-gold/5 font-sans text-xs">
-                          {filteredProducts.length > 0 ? (
-                            filteredProducts.map((prod) => (
-                              <tr key={prod.id} className="hover:bg-cream-latte/[0.02] transition-colors">
-                                <td className="py-4 px-6 text-left flex items-center gap-3">
-                                  <div className="w-12 h-12 bg-espresso/50 border border-warm-gold/10 rounded-xl p-1 flex items-center justify-center">
-                                    <img src={prod.image.startsWith('http') ? prod.image : `${API_BASE_URL}${prod.image}`} alt={prod.name} className="h-full w-full object-contain" />
+                  {/* Spaced Table with Rounded rows */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-separate border-spacing-y-2.5 text-left text-xs">
+                      <thead>
+                        <tr className="text-[10px] text-[#D4AF37] uppercase tracking-[0.2em] font-bold">
+                          <th className="py-3 px-6">Product Details</th>
+                          <th className="py-3 px-6">Category</th>
+                          <th className="py-3 px-6">Roast Profile</th>
+                          <th className="py-3 px-6">Price Structure</th>
+                          <th className="py-3 px-6 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredProducts.length > 0 ? (
+                          filteredProducts.map((prod) => (
+                            <tr 
+                              key={prod.id} 
+                              className="bg-[#0D0D0D] border border-white/5 rounded-2xl hover:border-[#D4AF37]/40 hover:bg-[#121212] transition-all duration-300 shadow-md group"
+                            >
+                              <td className="py-4 px-6 rounded-l-2xl border-l border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-12 h-12 bg-[#050505] border border-white/10 rounded-xl p-1 flex items-center justify-center">
+                                    <img 
+                                      src={prod.image.startsWith('http') ? prod.image : `${API_BASE_URL}${prod.image}`} 
+                                      alt={prod.name} 
+                                      className="h-full w-full object-contain" 
+                                    />
                                   </div>
                                   <div>
-                                    <h4 className="font-playfair font-bold text-sm text-cream-latte">{prod.name}</h4>
-                                    <span className="text-[9px] text-cream-latte/45 tracking-widest uppercase font-bold">{prod.tagline}</span>
+                                    <h4 className="font-playfair font-bold text-sm text-white group-hover:text-[#F4E2B8] transition-all">{prod.name}</h4>
+                                    <span className="text-[9px] text-[#8A8A8A] tracking-widest uppercase font-bold">{prod.tagline}</span>
                                   </div>
-                                </td>
-                                <td className="py-4 px-6 text-left uppercase text-[10px] tracking-wider text-cream-latte/70">
-                                  {prod.category}
-                                </td>
-                                <td className="py-4 px-6 text-left">
-                                  <div className="font-bold text-cream-latte">{prod.roast}</div>
-                                  <div className="text-[10px] text-warm-gold/60 mt-0.5">{prod.chicory}</div>
-                                </td>
-                                <td className="py-4 px-6 text-left font-bold text-[#F8E8D2]">
-                                  ₹{prod.price}
-                                  {prod.originalPrice && (
-                                    <span className="text-[10px] text-cream-latte/30 line-through ml-2 font-normal">
-                                      ₹{prod.originalPrice}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-4 px-6 text-center">
-                                  <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      onClick={() => handleOpenEditModal(prod)}
-                                      className="p-2 bg-cream-latte/5 hover:bg-warm-gold/20 text-cream-latte hover:text-warm-gold rounded-lg border border-cream-latte/10 hover:border-warm-gold/30 transition-colors cursor-pointer"
-                                      title="Edit Product"
-                                    >
-                                      <Edit3 size={12} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteProduct(prod.id)}
-                                      className="p-2 bg-red-950/10 hover:bg-red-950/40 text-red-400 hover:text-red-300 rounded-lg border border-transparent transition-colors cursor-pointer"
-                                      title="Delete Product"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={5} className="py-12 text-center text-cream-latte/40">
-                                <HelpCircle className="mx-auto mb-3 text-cream-latte/20" size={32} />
-                                No product matrices match your filter queries.
+                                </div>
+                              </td>
+                              <td className="py-4 px-6 border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all uppercase text-[10px] tracking-wider text-gray-400">
+                                {prod.category}
+                              </td>
+                              <td className="py-4 px-6 border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all">
+                                <div className="font-bold text-white">{prod.roast}</div>
+                                <div className="text-[10px] text-[#D4AF37]/75 mt-0.5">{prod.chicory}</div>
+                              </td>
+                              <td className="py-4 px-6 border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all font-bold text-[#F4E2B8]">
+                                ₹{prod.price}
+                                {prod.originalPrice && (
+                                  <span className="text-[10px] text-gray-500 line-through ml-2 font-normal">
+                                    ₹{prod.originalPrice}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-4 px-6 rounded-r-2xl border-r border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => handleOpenEditModal(prod)}
+                                    className="p-2 bg-white/5 hover:bg-[#D4AF37]/20 text-white hover:text-[#D4AF37] rounded-lg border border-white/10 hover:border-[#D4AF37]/30 transition-colors cursor-pointer"
+                                    title="Edit Product"
+                                  >
+                                    <Edit3 size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(prod.id)}
+                                    className="p-2 bg-red-950/20 hover:bg-red-950/50 text-red-400 hover:text-red-300 rounded-lg border border-transparent transition-colors cursor-pointer"
+                                    title="Delete Product"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="py-12 text-center text-gray-500 bg-[#0D0D0D] rounded-2xl border border-white/5">
+                              <HelpCircle className="mx-auto mb-3 text-gray-600" size={32} />
+                              No products found matching your catalog query.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
+
                 </div>
               )}
 
-              {/* TAB 3: SHIPROCKET LOGISTICS */}
-              {activeTab === 'shiprocket' && (
-                <div className="flex flex-col gap-8 text-left">
+              {/* TAB 3: REGISTERED CONNOISSEURS (CUSTOMERS REDESIGNED) */}
+              {activeTab === 'customers' && (
+                <div className="flex flex-col gap-6 text-left max-w-7xl mx-auto pb-12">
                   
+                  {/* Title Block */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#D4AF37]/15">
+                    <div>
+                      <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block">
+                        Customer Operations
+                      </span>
+                      <h1 className="text-2xl md:text-3xl font-playfair font-bold text-white mt-1">
+                        Connoisseur Registry Registry
+                      </h1>
+                    </div>
+                  </div>
+
+                  {/* Customer Status Filters and Search */}
+                  <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-[#0D0D0D]/60 border border-[#D4AF37]/15 p-4 rounded-2xl backdrop-blur-md">
+                    <div className="relative w-full sm:max-w-xs">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Search by name, email, or mobile..."
+                        value={customerSearchQuery}
+                        onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#050505] border border-white/10 rounded-xl font-sans text-xs focus:outline-none focus:border-[#D4AF37] text-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Filter Status:</span>
+                      <div className="flex bg-[#050505] border border-white/10 rounded-xl p-1 gap-1">
+                        <button
+                          onClick={() => setCustomerStatusFilter('all')}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase transition-all duration-300 cursor-pointer ${
+                            customerStatusFilter === 'all' ? 'bg-[#D4AF37] text-[#050505]' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          All
+                        </button>
+                        <button
+                          onClick={() => setCustomerStatusFilter('verified')}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase transition-all duration-300 cursor-pointer ${
+                            customerStatusFilter === 'verified' ? 'bg-[#D4AF37] text-[#050505]' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Verified
+                        </button>
+                        <button
+                          onClick={() => setCustomerStatusFilter('unverified')}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase transition-all duration-300 cursor-pointer ${
+                            customerStatusFilter === 'unverified' ? 'bg-[#D4AF37] text-[#050505]' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Unverified
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Table with Rounded Rows & spacing & hover glowing */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-separate border-spacing-y-2.5 text-left text-xs">
+                      <thead>
+                        <tr className="text-[10px] text-[#D4AF37] uppercase tracking-[0.2em] font-bold">
+                          <th className="py-3 px-6">Connoisseur Profile</th>
+                          <th className="py-3 px-6">Email Address</th>
+                          <th className="py-3 px-6">Contact Number</th>
+                          <th className="py-3 px-6">Verified Legitimacy</th>
+                          <th className="py-3 px-6">Total Spend (INR)</th>
+                          <th className="py-3 px-6 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedCustomers.length > 0 ? (
+                          paginatedCustomers.map((user) => {
+                            const initials = user.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'C';
+                            
+                            // Calculate user metrics
+                            const userOrders = shipments.filter(s => s.email?.toLowerCase() === user.email?.toLowerCase());
+                            const orderCount = userOrders.length;
+                            const totalSpend = userOrders.reduce((sum, o) => sum + o.amount, 0);
+                            const lastOrderDate = userOrders.length > 0 ? userOrders[userOrders.length - 1].date || 'N/A' : 'No bookings';
+
+                            const isVerified = user.status === 'Verified Customer' || orderCount > 0;
+                            const displayStatus = isVerified ? 'Verified Customer' : 'Unverified Registration';
+
+                            return (
+                              <tr 
+                                key={user.id || user.email}
+                                onClick={() => setSelectedCustomer({ ...user, orderCount, totalSpend, lastOrderDate, isVerified, displayStatus })}
+                                className="bg-[#0D0D0D] border border-white/5 rounded-2xl hover:border-[#D4AF37]/50 hover:bg-[#121212] transition-all duration-300 transform hover:-translate-y-0.5 cursor-pointer shadow-lg hover:shadow-[0_0_15px_rgba(212,175,55,0.1)] group"
+                              >
+                                <td className="py-4 px-6 rounded-l-2xl border-l border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#D4AF37]/20 to-[#F4E2B8]/5 border border-[#D4AF37]/35 text-[#D4AF37] flex items-center justify-center font-playfair font-black text-xs shadow-inner">
+                                      {initials}
+                                    </div>
+                                    <div>
+                                      <h4 className="font-playfair font-bold text-sm text-white group-hover:text-[#F4E2B8] transition-all">{user.name}</h4>
+                                      <span className="text-[8px] text-[#8A8A8A] tracking-widest uppercase font-mono">{user.id || 'CUST-ID'}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all font-mono text-gray-300">
+                                  {user.email}
+                                </td>
+                                <td className="py-4 px-6 border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all font-mono text-gray-300">
+                                  {user.phone || <span className="text-gray-600">N/A</span>}
+                                </td>
+                                <td className="py-4 px-6 border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all">
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-sans font-bold uppercase tracking-wider border ${
+                                      isVerified 
+                                        ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' 
+                                        : 'bg-red-950/20 border-red-500/20 text-red-300'
+                                    }`}>
+                                      {displayStatus}
+                                    </span>
+                                    {isVerified && user.auditStatus && (
+                                      <span className={`px-2 py-0.5 rounded text-[8px] font-sans font-bold uppercase tracking-widest ${
+                                        user.auditStatus === 'Original Customer Record' 
+                                          ? 'bg-emerald-950/20 border border-emerald-500/20 text-emerald-400' 
+                                          : 'bg-purple-950/20 border border-purple-500/20 text-purple-300'
+                                      }`}>
+                                        {user.auditStatus}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-4 px-6 border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all font-bold text-[#F4E2B8]">
+                                  ₹{totalSpend.toLocaleString('en-IN')}
+                                  <span className="text-[10px] text-gray-500 font-normal block mt-0.5">{orderCount} order(s)</span>
+                                </td>
+                                <td className="py-4 px-6 rounded-r-2xl border-r border-t border-b border-white/5 group-hover:border-[#D4AF37]/20 transition-all text-right">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedCustomer({ ...user, orderCount, totalSpend, lastOrderDate, isVerified, displayStatus });
+                                    }}
+                                    className="px-3.5 py-2 bg-white/5 hover:bg-[#D4AF37]/20 border border-white/10 hover:border-[#D4AF37]/30 text-white rounded-xl transition-all cursor-pointer font-bold text-[10px] uppercase tracking-wider"
+                                  >
+                                    Inspect Profile
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center text-gray-500 bg-[#0D0D0D] rounded-2xl border border-white/5">
+                              <HelpCircle className="mx-auto mb-3 text-gray-600" size={32} />
+                              No gourmet coffee connoisseurs match your filters.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Customer Registry Pagination */}
+                  {totalCustomerPages > 1 && (
+                    <div className="flex justify-between items-center mt-4 bg-[#0D0D0D] border border-white/5 p-4 rounded-2xl">
+                      <span className="text-xs text-gray-400">
+                        Showing page <span className="font-bold text-white">{customerPage}</span> of <span className="font-bold text-white">{totalCustomerPages}</span>
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setCustomerPage(prev => Math.max(prev - 1, 1))}
+                          disabled={customerPage === 1}
+                          className="px-4 py-2 bg-[#050505] border border-white/10 rounded-xl text-xs font-bold transition-all hover:bg-white/5 cursor-pointer disabled:opacity-50"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setCustomerPage(prev => Math.min(prev + 1, totalCustomerPages))}
+                          disabled={customerPage === totalCustomerPages}
+                          className="px-4 py-2 bg-[#050505] border border-white/10 rounded-xl text-xs font-bold transition-all hover:bg-white/5 cursor-pointer disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* TAB 4: SHIPROCKET LOGISTICS */}
+              {activeTab === 'shiprocket' && (
+                <div className="flex flex-col gap-8 text-left max-w-7xl mx-auto pb-12">
+                  
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#D4AF37]/15">
+                    <div>
+                      <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block">
+                        Shiprocket API Engine
+                      </span>
+                      <h1 className="text-2xl md:text-3xl font-playfair font-bold text-white mt-1">
+                        Logistics & Courier Orchestration
+                      </h1>
+                    </div>
+                  </div>
+
                   {/* Shipping rates calculator */}
-                  <div className="glassmorphism border border-warm-gold/15 p-6 rounded-[30px]">
-                    <span className="text-[10px] font-sans text-warm-gold uppercase tracking-[0.25em] font-bold block mb-1">
-                      Shiprocket API Integration
+                  <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-[30px] shadow-xl">
+                    <span className="text-[10px] font-sans text-[#D4AF37] uppercase tracking-[0.25em] font-bold block mb-1">
+                      Direct Hub Services
                     </span>
-                    <h3 className="font-playfair font-bold text-xl text-cream-latte mb-6">
+                    <h3 className="font-playfair font-bold text-xl text-white mb-6">
                       Real-time Courier Routing & Rate Calculator
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-6">
                       <div>
-                        <label className="text-[10px] text-cream-latte/60 font-sans uppercase tracking-wider mb-2 block font-bold">Source Pincode</label>
+                        <label className="text-[10px] text-gray-400 font-sans uppercase tracking-wider mb-2 block font-bold">Source Hub Pincode</label>
                         <input
                           type="text"
                           value={calcSource}
                           onChange={(e) => setCalcSource(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-xs font-sans text-cream-latte focus:outline-none focus:border-warm-gold/30"
+                          className="w-full px-4 py-2.5 bg-[#050505] border border-white/10 rounded-xl text-xs font-sans text-white focus:outline-none focus:border-[#D4AF37]"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-cream-latte/60 font-sans uppercase tracking-wider mb-2 block font-bold">Destination Pincode</label>
+                        <label className="text-[10px] text-gray-400 font-sans uppercase tracking-wider mb-2 block font-bold">Destination Pincode</label>
                         <input
                           type="text"
                           value={calcDest}
                           onChange={(e) => setCalcDest(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-xs font-sans text-cream-latte focus:outline-none focus:border-warm-gold/30"
+                          className="w-full px-4 py-2.5 bg-[#050505] border border-white/10 rounded-xl text-xs font-sans text-white focus:outline-none focus:border-[#D4AF37]"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-cream-latte/60 font-sans uppercase tracking-wider mb-2 block font-bold">Package Weight (KG)</label>
+                        <label className="text-[10px] text-gray-400 font-sans uppercase tracking-wider mb-2 block font-bold">Package Weight (KG)</label>
                         <select
                           value={calcWeight}
                           onChange={(e) => setCalcWeight(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-xs font-sans text-cream-latte focus:outline-none cursor-pointer"
+                          className="w-full px-4 py-2.5 bg-[#050505] border border-white/10 rounded-xl text-xs font-sans text-white focus:outline-none cursor-pointer"
                         >
                           <option value="0.25">0.25 kg (1 Standard pouch)</option>
                           <option value="0.5">0.5 kg (2 Pouches)</option>
@@ -1252,7 +1925,7 @@ interface AdminUser {
                       </div>
                       <button
                         onClick={handleCalculateShipping}
-                        className="w-full py-2.5 bg-warm-gold text-espresso font-sans text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-cream-latte transition-colors cursor-pointer"
+                        className="w-full py-2.5 bg-[#D4AF37] text-[#050505] font-sans text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-[#F4E2B8] transition-colors cursor-pointer"
                       >
                         {isCalculating ? 'Computing Rates...' : 'Get Shiprocket Rates'}
                       </button>
@@ -1265,21 +1938,21 @@ interface AdminUser {
                           initial={{ opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 15 }}
-                          className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-warm-gold/10 pt-6"
+                          className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/10 pt-6"
                         >
                           {shippingRates.map((r, i) => (
-                            <div key={i} className="bg-espresso/60 border border-warm-gold/15 p-4 rounded-2xl flex flex-col justify-between hover:border-warm-gold/45 transition-colors">
+                            <div key={i} className="bg-[#050505]/60 border border-[#D4AF37]/20 p-4 rounded-2xl flex flex-col justify-between hover:border-[#D4AF37] transition-colors">
                               <div className="flex items-center justify-between mb-3">
-                                <span className="bg-warm-gold/10 border border-warm-gold/20 text-warm-gold text-[9px] px-2 py-0.5 rounded font-sans font-bold uppercase tracking-wider">
+                                <span className="bg-[#D4AF37]/10 border border-[#D4AF37]/20 text-[#D4AF37] text-[9px] px-2 py-0.5 rounded font-sans font-bold uppercase tracking-wider">
                                   {r.badge}
                                 </span>
-                                <span className="text-[10px] text-cream-latte/50 font-sans">Rating: {r.rating}</span>
+                                <span className="text-[10px] text-gray-500 font-sans">Rating: {r.rating}</span>
                               </div>
-                              <h4 className="font-playfair font-bold text-sm text-cream-latte">{r.partner}</h4>
-                              <p className="text-[10px] text-cream-latte/60 font-sans mt-0.5">Estimated transit: {r.transit}</p>
+                              <h4 className="font-playfair font-bold text-sm text-white">{r.partner}</h4>
+                              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Transit: {r.transit}</p>
                               
-                              <div className="flex justify-between items-center mt-5 border-t border-warm-gold/5 pt-3">
-                                <span className="font-bebas text-lg text-warm-gold tracking-widest">₹{r.rate}.00</span>
+                              <div className="flex justify-between items-center mt-5 border-t border-white/10 pt-3">
+                                <span className="font-sans text-lg font-bold text-[#D4AF37]">₹{r.rate}.00</span>
                                 <span className="text-[9px] font-sans text-emerald-400 font-bold uppercase tracking-widest">Serviceable</span>
                               </div>
                             </div>
@@ -1290,45 +1963,45 @@ interface AdminUser {
                   </div>
 
                   {/* Shiprocket Shipments list */}
-                  <div className="glassmorphism border border-warm-gold/15 rounded-3xl overflow-hidden shadow-lg">
-                    <div className="bg-espresso/60 border-b border-warm-gold/10 px-6 py-4 flex items-center justify-between">
-                      <h4 className="font-playfair font-bold text-base text-cream-latte">Order Shipments Matrices</h4>
-                      <span className="text-[10px] text-warm-gold font-sans font-bold uppercase tracking-widest">Auto-linked to frontend</span>
+                  <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 rounded-3xl overflow-hidden shadow-xl">
+                    <div className="bg-[#0D0D0D]/90 border-b border-[#D4AF37]/15 px-6 py-4 flex items-center justify-between">
+                      <h4 className="font-playfair font-bold text-base text-white">Logistics Fulfillment Dashboard</h4>
+                      <span className="text-[9px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest">Shipment Sync Active</span>
                     </div>
 
                     <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
+                      <table className="w-full border-collapse text-left text-xs">
                         <thead>
-                          <tr className="border-b border-warm-gold/10 text-[10px] text-warm-gold uppercase tracking-[0.2em] bg-espresso/30 font-bold">
-                            <th className="py-4 px-6 text-left">Order Details</th>
-                            <th className="py-4 px-6 text-left">Customer</th>
-                            <th className="py-4 px-6 text-left">AWB Code / Logistics</th>
-                            <th className="py-4 px-6 text-left">Status</th>
-                            <th className="py-4 px-6 text-center">AWB Action</th>
+                          <tr className="border-b border-[#D4AF37]/15 text-[10px] text-[#D4AF37] uppercase tracking-[0.2em] bg-[#0D0D0D] font-bold">
+                            <th className="py-4 px-6">Consignment ID</th>
+                            <th className="py-4 px-6">Customer Details</th>
+                            <th className="py-4 px-6">AWB Logistics Code</th>
+                            <th className="py-4 px-6">Fulfillment Status</th>
+                            <th className="py-4 px-6 text-center">Fulfillment Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-warm-gold/5 font-sans text-xs">
+                        <tbody className="divide-y divide-white/5 font-sans text-xs">
                           {shipments.map((s) => (
-                            <tr key={s.id} className="hover:bg-cream-latte/[0.02] transition-colors">
-                              <td className="py-4 px-6 text-left">
-                                <div className="font-bold text-cream-latte">{s.id}</div>
-                                <div className="text-[10px] text-cream-latte/50 mt-0.5">{s.productName}</div>
+                            <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
+                              <td className="py-4 px-6 font-bold text-white">
+                                {s.id}
+                                <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate max-w-[200px]" title={s.productName}>{s.productName}</div>
                               </td>
-                              <td className="py-4 px-6 text-left">
-                                <div className="font-bold text-cream-latte">{s.customerName}</div>
-                                <div className="text-[10px] text-cream-latte/45 mt-0.5">{s.city} (PIN: {s.pincode})</div>
+                              <td className="py-4 px-6">
+                                <div className="font-bold text-white">{s.customerName}</div>
+                                <div className="text-[10px] text-gray-500 mt-0.5">{s.city} (PIN: {s.pincode})</div>
                               </td>
-                              <td className="py-4 px-6 text-left">
+                              <td className="py-4 px-6">
                                 {s.awb ? (
                                   <div>
-                                    <div className="font-bold text-warm-gold tracking-widest">{s.awb}</div>
-                                    <div className="text-[10px] text-cream-latte/45 mt-0.5">{s.courier}</div>
+                                    <div className="font-bold text-[#D4AF37] tracking-widest">{s.awb}</div>
+                                    <div className="text-[10px] text-gray-500 mt-0.5">{s.courier}</div>
                                   </div>
                                 ) : (
-                                  <span className="text-[10px] text-cream-latte/30 uppercase tracking-widest">Not Dispatched</span>
+                                  <span className="text-[10px] text-gray-600 uppercase tracking-widest">Awaiting Dispatch</span>
                                 )}
                               </td>
-                              <td className="py-4 px-6 text-left">
+                              <td className="py-4 px-6">
                                 <span className={`px-3 py-1 rounded-full text-[9px] font-sans font-bold uppercase tracking-wider border ${
                                   s.status === 'Pending' ? 'bg-red-950/20 border-red-500/20 text-red-300' :
                                   s.status === 'Ready to Ship' ? 'bg-amber-950/20 border-amber-500/20 text-amber-300' :
@@ -1338,11 +2011,12 @@ interface AdminUser {
                                   {s.status}
                                 </span>
                               </td>
-                              <td className="py-4 px-6 text-center">                                <div className="flex items-center justify-center gap-2">
+                              <td className="py-4 px-6 text-center">
+                                <div className="flex items-center justify-center gap-2">
                                   {s.status === 'Pending' || s.status === 'Ready to Ship' ? (
                                     <button
                                       onClick={() => handleDispatchShipment(s.id, 'Delhivery Prime - Express')}
-                                      className="px-4 py-2 bg-warm-gold text-espresso font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-cream-latte transition-all cursor-pointer shadow-md font-bold"
+                                      className="px-4 py-2 bg-[#D4AF37] text-[#050505] font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-[#F4E2B8] transition-all cursor-pointer shadow-md font-bold"
                                     >
                                       Generate AWB
                                     </button>
@@ -1350,7 +2024,7 @@ interface AdminUser {
                                     <>
                                       <button
                                         onClick={() => setSelectedLabelShipment(s)}
-                                        className="px-3 py-2 bg-cream-latte/5 hover:bg-cream-latte/15 border border-cream-latte/10 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-cream-latte hover:text-warm-gold transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-white hover:text-[#D4AF37] transition-all cursor-pointer flex items-center gap-1 font-bold"
                                       >
                                         <FileText size={10} />
                                         Label
@@ -1364,148 +2038,149 @@ interface AdminUser {
                                       </button>
                                     </>
                                   )}
-                                </div>                              </td>
+                                </div>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                   </div>
+
                 </div>
               )}
 
-              {/* TAB 4: LIVE CHAT DESK */}
+              {/* TAB 5: LIVE CHAT DESK */}
               {activeTab === 'chat' && (
-                <div className="glassmorphism border border-warm-gold/15 rounded-[30px] overflow-hidden shadow-lg grid grid-cols-1 md:grid-cols-12 h-[600px] text-left">
-                  
-                  {/* Chat Inbox panel (sidebar) */}
-                  <div className="md:col-span-4 border-r border-warm-gold/10 flex flex-col h-full bg-espresso/40">
-                    <div className="p-4 border-b border-warm-gold/10 bg-espresso/50">
-                      <span className="text-[9px] font-sans text-warm-gold uppercase tracking-[0.2em] font-bold block mb-1">
-                        Active Messaging Vault
-                      </span>
-                      <h4 className="font-playfair font-bold text-base text-cream-latte">Customer Conversations</h4>
-                    </div>
-
-                    <div className="flex-grow overflow-y-auto divide-y divide-warm-gold/5">
-                      {chats.map((c) => (
-                        <button
-                          key={c.id}
-                          onClick={() => setActiveChatId(c.id)}
-                          className={`w-full p-4 flex gap-3 text-left transition-colors cursor-pointer hover:bg-cream-latte/[0.02] ${
-                            activeChatId === c.id ? 'bg-cream-latte/[0.04]' : ''
-                          }`}
-                        >
-                          <div className={`w-9 h-9 rounded-full ${c.avatarColor} flex items-center justify-center font-playfair font-black text-xs shrink-0 shadow-inner`}>
-                            {c.customerName.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <div className="flex-grow overflow-hidden relative">
-                            <div className="flex justify-between items-center">
-                              <h5 className="font-playfair font-bold text-xs text-cream-latte">{c.customerName}</h5>
-                              <span className="text-[8px] font-sans text-cream-latte/30">Active</span>
-                            </div>
-                            <span className="text-[9px] text-warm-gold font-sans font-bold uppercase tracking-wider block mt-0.5">{c.topic}</span>
-                            <p className="text-[10px] text-cream-latte/60 truncate mt-1 leading-normal pr-4">{c.lastMessage}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Active Chat Conversation window */}
-                  <div className="md:col-span-8 flex flex-col h-full justify-between bg-espresso/25">
-                    {activeChat ? (
-                      <>
-                        {/* Conversational Partner details */}
-                        <div className="p-4 bg-espresso/60 border-b border-warm-gold/10 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-full ${activeChat.avatarColor} flex items-center justify-center font-playfair font-black text-xs shadow-inner`}>
-                              {activeChat.customerName.split(' ').map(n => n[0]).join('')}
-                            </div>
-                            <div>
-                              <h5 className="font-playfair font-bold text-sm text-cream-latte">{activeChat.customerName}</h5>
-                              <span className="text-[9px] text-warm-gold font-sans font-bold uppercase tracking-wider block mt-0.5">{activeChat.topic}</span>
-                            </div>
-                          </div>
-
-                          <span className={`px-2.5 py-0.5 rounded text-[8px] font-sans tracking-widest font-bold uppercase border ${
-                            activeChat.status === 'active' 
-                              ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' 
-                              : 'bg-cream-latte/5 border-cream-latte/10 text-cream-latte/40'
-                          }`}>
-                            {activeChat.status}
-                          </span>
-                        </div>
-
-                        {/* Message list */}
-                        <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
-                          {activeChat.messages.map((m) => {
-                            const isAdmin = m.sender === 'admin';
-                            return (
-                              <div
-                                key={m.id}
-                                className={`flex flex-col max-w-[75%] ${
-                                  isAdmin ? 'ml-auto text-right items-end' : 'mr-auto text-left items-start'
-                                }`}
-                              >
-                                <div className={`p-4.5 rounded-2xl text-xs leading-relaxed ${
-                                  isAdmin 
-                                    ? 'bg-warm-gold text-espresso rounded-tr-none shadow-md font-sans font-bold' 
-                                    : 'glassmorphism border border-cream-latte/10 text-cream-latte rounded-tl-none'
-                                }`}>
-                                  {m.text}
-                                </div>
-                                <span className="text-[8px] text-cream-latte/30 font-sans mt-1.5">{m.time}</span>
-                              </div>
-                            );
-                          })}
-                          <div ref={chatMessagesEndRef} />
-                        </div>
-
-                        {/* Interactive Message input form */}
-                        <div className="p-4 border-t border-warm-gold/10 bg-espresso/50 flex items-center gap-3">
-                          <input
-                            type="text"
-                            placeholder="Type premium response matrices..."
-                            value={typedMessage}
-                            onChange={(e) => setTypedMessage(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSendMessage();
-                            }}
-                            className="w-full px-4 py-3 bg-espresso border border-cream-latte/10 rounded-xl text-xs font-sans focus:outline-none focus:border-warm-gold/30 text-cream-latte"
-                          />
-                          <button
-                            onClick={handleSendMessage}
-                            className="p-3 bg-warm-gold hover:bg-cream-latte text-espresso rounded-xl transition-all cursor-pointer shadow-md"
-                          >
-                            <Send size={14} className="stroke-[2.5]" />
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center flex-grow p-12 text-cream-latte/30">
-                        <AlertCircle size={36} className="text-cream-latte/10 mb-4" />
-                        Select a customer conversation tab on the left to start live chats.
+                <div className="flex flex-col gap-6 text-left max-w-7xl mx-auto h-[calc(100vh-140px)]">
+                  <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 rounded-[30px] overflow-hidden shadow-xl grid grid-cols-1 md:grid-cols-12 h-full text-left">
+                    
+                    {/* Chat list */}
+                    <div className="md:col-span-4 border-r border-[#D4AF37]/15 flex flex-col h-full bg-[#050505]">
+                      <div className="p-4 border-b border-[#D4AF37]/15 bg-[#0D0D0D]">
+                        <span className="text-[9px] font-sans text-[#D4AF37] uppercase tracking-[0.2em] font-bold block mb-1">
+                          Live Inboxes
+                        </span>
+                        <h4 className="font-playfair font-bold text-base text-white">Customer Support</h4>
                       </div>
-                    )}
+
+                      <div className="flex-grow overflow-y-auto divide-y divide-white/5">
+                        {chats.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => setActiveChatId(c.id)}
+                            className={`w-full p-4 flex gap-3 text-left transition-colors cursor-pointer hover:bg-white/5 ${
+                              activeChatId === c.id ? 'bg-white/5 border-l-2 border-[#D4AF37]' : ''
+                            }`}
+                          >
+                            <div className={`w-9 h-9 rounded-full ${c.avatarColor} flex items-center justify-center font-playfair font-black text-xs shrink-0 shadow-inner`}>
+                              {c.customerName.split(' ').map(n => n[0]).join('')}
+                            </div>
+                            <div className="flex-grow overflow-hidden relative">
+                              <div className="flex justify-between items-center">
+                                <h5 className="font-playfair font-bold text-xs text-white">{c.customerName}</h5>
+                                <span className="text-[8px] font-sans text-gray-500">Active</span>
+                              </div>
+                              <span className="text-[9px] text-[#D4AF37] font-sans font-bold uppercase tracking-wider block mt-0.5">{c.topic}</span>
+                              <p className="text-[10px] text-gray-400 truncate mt-1 leading-normal pr-4">{c.lastMessage}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Active chat window */}
+                    <div className="md:col-span-8 flex flex-col h-full justify-between bg-[#0D0D0D]">
+                      {activeChat ? (
+                        <>
+                          {/* Chat header */}
+                          <div className="p-4 bg-[#050505] border-b border-[#D4AF37]/15 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-9 h-9 rounded-full ${activeChat.avatarColor} flex items-center justify-center font-playfair font-black text-xs shadow-inner`}>
+                                {activeChat.customerName.split(' ').map(n => n[0]).join('')}
+                              </div>
+                              <div>
+                                <h5 className="font-playfair font-bold text-sm text-white">{activeChat.customerName}</h5>
+                                <span className="text-[9px] text-[#D4AF37] font-sans font-bold uppercase tracking-wider block mt-0.5">{activeChat.topic}</span>
+                              </div>
+                            </div>
+
+                            <span className="px-2.5 py-0.5 rounded text-[8px] font-sans tracking-widest font-bold uppercase border bg-emerald-950/20 border-emerald-500/20 text-emerald-400">
+                              {activeChat.status}
+                            </span>
+                          </div>
+
+                          {/* Message List */}
+                          <div className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
+                            {activeChat.messages.map((m) => {
+                              const isAdmin = m.sender === 'admin';
+                              return (
+                                <div
+                                  key={m.id}
+                                  className={`flex flex-col max-w-[75%] ${
+                                    isAdmin ? 'ml-auto text-right items-end' : 'mr-auto text-left items-start'
+                                  }`}
+                                >
+                                  <div className={`p-4 rounded-2xl text-xs leading-relaxed ${
+                                    isAdmin 
+                                      ? 'bg-[#D4AF37] text-[#050505] rounded-tr-none shadow-md font-sans font-bold' 
+                                      : 'bg-[#050505] border border-[#D4AF37]/20 text-white rounded-tl-none'
+                                  }`}>
+                                    {m.text}
+                                  </div>
+                                  <span className="text-[8px] text-gray-500 font-sans mt-1.5">{m.time}</span>
+                                </div>
+                              );
+                            })}
+                            <div ref={chatMessagesEndRef} />
+                          </div>
+
+                          {/* Message inputs */}
+                          <div className="p-4 border-t border-white/10 bg-[#050505] flex items-center gap-3">
+                            <input
+                              type="text"
+                              placeholder="Type premium response matrices..."
+                              value={typedMessage}
+                              onChange={(e) => setTypedMessage(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSendMessage();
+                              }}
+                              className="w-full px-4 py-3 bg-[#0D0D0D] border border-white/10 rounded-xl text-xs font-sans focus:outline-none focus:border-[#D4AF37] text-white"
+                            />
+                            <button
+                              onClick={handleSendMessage}
+                              className="p-3 bg-[#D4AF37] hover:bg-[#F4E2B8] text-[#050505] rounded-xl transition-all cursor-pointer shadow-md"
+                            >
+                              <Send size={14} className="stroke-[2.5]" />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center flex-grow p-12 text-gray-500">
+                          <AlertCircle size={36} className="text-gray-600 mb-4" />
+                          Select a support session to initiate premium secure communications.
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 </div>
               )}
 
-              {/* TAB 5: MULTI-ADMIN ACCESS CONTROL */}
+              {/* TAB 6: MULTI-ADMIN ACCESS CONTROL */}
               {activeTab === 'admins' && (
-                <div className="flex flex-col gap-6 text-left">
+                <div className="flex flex-col gap-6 text-left max-w-7xl mx-auto pb-12">
                   
                   {/* Actions Header */}
-                  <div className="flex items-center justify-between bg-black/30 border border-cream-latte/5 p-4 rounded-2xl backdrop-blur-md">
+                  <div className="flex items-center justify-between bg-[#0D0D0D]/60 border border-[#D4AF37]/15 p-4 rounded-2xl backdrop-blur-md">
                     <div>
-                      <h4 className="font-playfair font-bold text-sm text-cream-latte">Active Roasting Admins</h4>
-                      <p className="text-[10px] text-cream-latte/45 font-sans mt-0.5">Control operational credentials and lounge permissions.</p>
+                      <h4 className="font-playfair font-bold text-sm text-white">Active Roasting Admins</h4>
+                      <p className="text-[10px] text-gray-400 font-sans mt-0.5">Control operational credentials and lounge permissions.</p>
                     </div>
 
                     <button
                       onClick={() => setIsInviteModalOpen(true)}
-                      className="px-5 py-2.5 bg-warm-gold text-espresso font-sans text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-cream-latte transition-colors cursor-pointer flex items-center gap-2"
+                      className="px-5 py-2.5 bg-[#D4AF37] text-[#050505] font-sans text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-[#F4E2B8] transition-colors cursor-pointer flex items-center gap-2"
                     >
                       <UserPlus size={14} className="stroke-[2.5]" />
                       Invite Admin
@@ -1515,28 +2190,24 @@ interface AdminUser {
                   {/* Admin Grid list */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {admins.map((a) => (
-                      <div key={a.id} className="glass-premium-card p-6 border border-warm-gold/15 relative overflow-hidden flex flex-col justify-between">
-                        <div className="absolute top-0 right-0 w-20 h-20 rounded-full filter blur-[35px] bg-warm-gold/5 -z-10" />
+                      <div key={a.id} className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-2xl relative overflow-hidden flex flex-col justify-between shadow-xl">
+                        <div className="absolute top-0 right-0 w-20 h-20 rounded-full filter blur-[35px] bg-[#D4AF37]/5 pointer-events-none" />
                         
                         <div>
                           <div className="flex items-center justify-between mb-4">
-                            <span className={`px-2.5 py-0.5 rounded text-[8px] font-sans font-bold tracking-widest uppercase border ${
-                              a.status === 'Active' 
-                                ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' 
-                                : 'bg-amber-950/20 border-amber-500/20 text-amber-300'
-                            }`}>
+                            <span className="px-2.5 py-0.5 rounded text-[8px] font-sans font-bold tracking-widest uppercase border bg-emerald-950/20 border-emerald-500/20 text-emerald-400">
                               {a.status}
                             </span>
-                            <span className="text-[9px] font-sans font-bold text-warm-gold uppercase tracking-widest">{a.role}</span>
+                            <span className="text-[9px] font-sans font-bold text-[#D4AF37] uppercase tracking-widest">{a.role}</span>
                           </div>
 
                           <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-cream-latte/5 border border-cream-latte/15 flex items-center justify-center font-playfair font-black text-sm text-cream-latte">
+                            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center font-playfair font-black text-sm text-white">
                               {a.name.split(' ').map(n => n[0]).join('')}
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <h4 className="font-playfair font-bold text-sm text-cream-latte">{a.name}</h4>
+                                <h4 className="font-playfair font-bold text-sm text-white">{a.name}</h4>
                                 {a.id === 'adm-1' && (
                                   <button 
                                     onClick={async () => {
@@ -1559,20 +2230,20 @@ interface AdminUser {
                                         }
                                       }
                                     }}
-                                    className="text-cream-latte/40 hover:text-warm-gold transition-colors cursor-pointer p-0.5 rounded"
+                                    className="text-gray-400 hover:text-[#D4AF37] transition-colors cursor-pointer p-0.5 rounded"
                                     title="Edit Super Admin Name"
                                   >
                                     <Edit3 size={10} />
                                   </button>
                                 )}
                               </div>
-                              <p className="text-[10px] text-cream-latte/50 font-sans mt-0.5">{a.email}</p>
+                              <p className="text-[10px] text-gray-500 font-sans mt-0.5">{a.email}</p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="border-t border-warm-gold/10 pt-4 flex justify-between items-center mt-4">
-                          <span className="text-[9px] font-sans text-cream-latte/30 uppercase">ID: {a.id}</span>
+                        <div className="border-t border-[#D4AF37]/10 pt-4 flex justify-between items-center mt-4">
+                          <span className="text-[9px] font-sans text-gray-500 uppercase">ID: {a.id}</span>
                           <button
                             onClick={() => handleDeleteAdmin(a.id)}
                             className="text-[10px] font-sans text-red-400 hover:text-red-300 uppercase font-bold cursor-pointer"
@@ -1584,70 +2255,451 @@ interface AdminUser {
                     ))}
                   </div>
 
-                  {/* Connoisseur Registry Panel */}
-                  <div className="bg-black/30 border border-warm-gold/15 p-6 rounded-3xl mt-8 backdrop-blur-md">
-                    <div className="mb-6">
-                      <h4 className="font-playfair font-bold text-sm text-warm-gold">Registered Connoisseur Registry</h4>
-                      <p className="text-[10px] text-cream-latte/45 font-sans mt-0.5">Real-time trace of authenticated gourmet coffee consumers.</p>
+                </div>
+              )}
+
+              {/* TAB 7: CUSTOMER RESTORATION & DATA INTEGRITY AUDIT */}
+              {activeTab === 'audit' && (
+                <div className="flex flex-col gap-6 text-left max-w-7xl mx-auto pb-12">
+                  
+                  {/* Title & Sync Badge */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#D4AF37]/15">
+                    <div>
+                      <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block">
+                        Database Administration
+                      </span>
+                      <h1 className="text-2xl md:text-3xl font-playfair font-bold text-white mt-1">
+                        Data Integrity & Restoration Audit
+                      </h1>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 bg-[#D4AF37]/10 border border-[#D4AF37]/30 px-4 py-2 rounded-xl">
+                      <Shield className="text-[#D4AF37]" size={16} />
+                      <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#D4AF37]">
+                        100% Production Data Synced
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Sync Details & Status Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Source Table 1 */}
+                    <div className="bg-[#0D0D0D]/60 border border-[#D4AF37]/15 p-4 rounded-2xl backdrop-blur-md flex flex-col justify-between">
+                      <div>
+                        <span className="text-[9px] font-sans font-bold text-gray-500 uppercase tracking-wider block">Source SQL Table</span>
+                        <h4 className="font-playfair font-bold text-sm text-white mt-1">wpox_wc_order_stats</h4>
+                      </div>
+                      <div className="flex items-center justify-between mt-4">
+                        <span className="text-[10px] text-gray-400 font-sans">935 records</span>
+                        <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Active</span>
+                      </div>
+                    </div>
+
+                    {/* Source Table 2 */}
+                    <div className="bg-[#0D0D0D]/60 border border-[#D4AF37]/15 p-4 rounded-2xl backdrop-blur-md flex flex-col justify-between">
+                      <div>
+                        <span className="text-[9px] font-sans font-bold text-gray-500 uppercase tracking-wider block">Metadata Engine</span>
+                        <h4 className="font-playfair font-bold text-sm text-white mt-1">wpox_postmeta</h4>
+                      </div>
+                      <div className="flex items-center justify-between mt-4">
+                        <span className="text-[10px] text-gray-400 font-sans">72,830 rows</span>
+                        <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Mapped</span>
+                      </div>
+                    </div>
+
+                    {/* Source Table 3 */}
+                    <div className="bg-[#0D0D0D]/60 border border-[#D4AF37]/15 p-4 rounded-2xl backdrop-blur-md flex flex-col justify-between">
+                      <div>
+                        <span className="text-[9px] font-sans font-bold text-gray-500 uppercase tracking-wider block">Item Details</span>
+                        <h4 className="font-playfair font-bold text-sm text-white mt-1">wpox_order_items</h4>
+                      </div>
+                      <div className="flex items-center justify-between mt-4">
+                        <span className="text-[10px] text-gray-400 font-sans">3,651 items</span>
+                        <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Linked</span>
+                      </div>
+                    </div>
+
+                    {/* DB Sync status */}
+                    <div className="bg-[#0D0D0D]/60 border border-[#D4AF37]/15 p-4 rounded-2xl backdrop-blur-md flex flex-col justify-between">
+                      <div>
+                        <span className="text-[9px] font-sans font-bold text-gray-500 uppercase tracking-wider block">MongoDB State</span>
+                        <h4 className="font-playfair font-bold text-sm text-white mt-1">Consistency Check</h4>
+                      </div>
+                      <div className="flex items-center justify-between mt-4">
+                        <span className="text-[10px] text-[#D4AF37] font-bold">169 Users / 935 Bookings</span>
+                        <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Consistent</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Restored Stats Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    {/* Stat Card 1 */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-2xl relative overflow-hidden shadow-xl">
+                      <div className="absolute top-0 right-0 w-20 h-20 rounded-full filter blur-[35px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <span className="text-[10px] tracking-widest font-sans font-bold text-gray-500 uppercase">Restored Orders</span>
+                      <h3 className="text-3xl font-playfair font-bold text-white mt-2">{shipments.length}</h3>
+                      <p className="text-[9px] font-sans text-gray-400 mt-2">All-time transactions from production dump</p>
+                    </div>
+
+                    {/* Stat Card 2 */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-2xl relative overflow-hidden shadow-xl">
+                      <div className="absolute top-0 right-0 w-20 h-20 rounded-full filter blur-[35px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <span className="text-[10px] tracking-widest font-sans font-bold text-gray-500 uppercase">Verified Customers</span>
+                      <h3 className="text-3xl font-playfair font-bold text-white mt-2">
+                        {registeredUsers.filter(u => u.status === 'Verified Customer').length}
+                      </h3>
+                      <p className="text-[9px] font-sans text-gray-400 mt-2">Reconstructed from direct order history</p>
+                    </div>
+
+                    {/* Stat Card 3 */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-2xl relative overflow-hidden shadow-xl">
+                      <div className="absolute top-0 right-0 w-20 h-20 rounded-full filter blur-[35px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <span className="text-[10px] tracking-widest font-sans font-bold text-gray-500 uppercase">Gross Revenue</span>
+                      <h3 className="text-3xl font-playfair font-bold text-white mt-2">₹{totalRevenue.toLocaleString('en-IN')}</h3>
+                      <p className="text-[9px] font-sans text-gray-400 mt-2">Aggregate transaction sales value</p>
+                    </div>
+
+                    {/* Stat Card 4 */}
+                    <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 p-6 rounded-2xl relative overflow-hidden shadow-xl">
+                      <div className="absolute top-0 right-0 w-20 h-20 rounded-full filter blur-[35px] bg-[#D4AF37]/5 pointer-events-none" />
+                      <span className="text-[10px] tracking-widest font-sans font-bold text-gray-500 uppercase">Average Order Value</span>
+                      <h3 className="text-3xl font-playfair font-bold text-white mt-2">₹{Math.round(averageOrderValue).toLocaleString('en-IN')}</h3>
+                      <p className="text-[9px] font-sans text-gray-400 mt-2">Average spending per completed order</p>
+                    </div>
+                  </div>
+
+                  {/* Restored Customer Profiles Log */}
+                  <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between pb-4 border-b border-[#D4AF37]/10 mb-6">
+                      <div>
+                        <h4 className="font-playfair font-bold text-base text-white">Verified Customer Restoration Logs</h4>
+                        <p className="text-[10px] text-gray-400 font-sans mt-0.5">Showing genuine customer profiles reconstructed from SQL order transactions.</p>
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left font-sans text-xs">
+                      <table className="w-full border-separate border-spacing-y-2.5 text-left text-xs">
                         <thead>
-                          <tr className="border-b border-warm-gold/10 text-warm-gold/60 text-[9px] uppercase tracking-wider font-bold">
-                            <th className="pb-3">Initials</th>
-                            <th className="pb-3">Name</th>
-                            <th className="pb-3">Email Address</th>
-                            <th className="pb-3">Contact Number</th>
-                            <th className="pb-3">Physical Address</th>
-                            <th className="pb-3">Account ID</th>
+                          <tr className="text-[10px] text-[#D4AF37] uppercase tracking-[0.2em] font-bold">
+                            <th className="py-3 px-6">Customer Profile</th>
+                            <th className="py-3 px-6">Email Address</th>
+                            <th className="py-3 px-6">Phone Number</th>
+                            <th className="py-3 px-6">Source Mapped</th>
+                            <th className="py-3 px-6">Total Spend (INR)</th>
+                            <th className="py-3 px-6">Order Count</th>
+                            <th className="py-3 px-6 text-right">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-warm-gold/5 text-cream-latte/85">
-                          {registeredUsers.length === 0 ? (
+                        <tbody>
+                          {registeredUsers.filter(u => u.role === 'Connoisseur').length > 0 ? (
+                            registeredUsers
+                              .filter(u => u.role === 'Connoisseur')
+                              .sort((a, b) => (b.totalSpend || 0) - (a.totalSpend || 0))
+                              .slice(0, 100) // Show top 100 restored profiles
+                              .map((u) => {
+                                const initials = u.name ? u.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'C';
+                                return (
+                                  <tr 
+                                    key={u.id}
+                                    className="bg-[#050505]/40 hover:bg-[#D4AF37]/5 transition-all duration-300 border border-[#D4AF37]/10 rounded-xl animate-fade-in"
+                                  >
+                                    <td className="py-3.5 px-6 font-medium rounded-l-xl">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center font-playfair font-bold text-xs text-white">
+                                          {initials}
+                                        </div>
+                                        <div>
+                                          <h4 className="font-playfair font-bold text-white text-xs">{u.name}</h4>
+                                          <span className="text-[8px] font-sans text-gray-500 uppercase tracking-widest">Added: {u.dateAdded || '01/01/2026'}</span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    
+                                    <td className="py-3.5 px-6 font-sans text-gray-400 font-medium">
+                                      {u.email}
+                                    </td>
+                                    
+                                    <td className="py-3.5 px-6 font-sans text-gray-400 font-medium">
+                                      {u.phone || 'No phone recorded'}
+                                    </td>
+                                    
+                                    <td className="py-3.5 px-6 font-sans">
+                                      <span className={`px-2 py-0.5 rounded text-[8px] font-sans font-bold uppercase tracking-widest ${
+                                        u.source === 'woocommerce' ? 'bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-[#D4AF37]' :
+                                        u.source === 'woocommerce_guest' ? 'bg-amber-950/20 border border-amber-500/20 text-amber-400' :
+                                        'bg-white/5 border border-white/15 text-gray-400'
+                                      }`}>
+                                        {u.source || 'opencart'}
+                                      </span>
+                                    </td>
+                                    
+                                    <td className="py-3.5 px-6 font-sans font-bold text-white">
+                                      ₹{Math.round(u.totalSpend || 0).toLocaleString('en-IN')}
+                                    </td>
+
+                                    <td className="py-3.5 px-6 font-sans text-gray-400 font-bold">
+                                      {u.orderCount || 0}
+                                    </td>
+                                    
+                                    <td className="py-3.5 px-6 text-right rounded-r-xl">
+                                      <button
+                                        onClick={() => setSelectedCustomer(u)}
+                                        className="px-3.5 py-1.5 bg-white/5 hover:bg-[#D4AF37]/10 border border-white/10 hover:border-[#D4AF37]/30 text-white hover:text-[#D4AF37] rounded-lg transition-all font-sans text-[10px] uppercase font-bold cursor-pointer"
+                                      >
+                                        Inspect Profile
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                          ) : (
                             <tr>
-                              <td colSpan={6} className="py-6 text-center text-cream-latte/30 font-medium italic">
-                                No registered connoisseur profiles logged in yet.
+                              <td colSpan={7} className="py-12 text-center text-gray-500 font-sans uppercase tracking-widest text-[10px]">
+                                No customers currently restored. Run restoration script to populate.
                               </td>
                             </tr>
-                          ) : (
-                            registeredUsers.map((user) => {
-                              const initials = user.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'C';
-                              
-                              // Format mixed address field (supporting custom JSON objects or pure address strings)
-                              let formattedAddress = 'No address recorded';
-                              if (user.address) {
-                                if (typeof user.address === 'object') {
-                                  formattedAddress = `${user.address.doorNo || ''}, ${user.address.area || ''}, ${user.address.city || ''} - ${user.address.pinCode || ''}`.replace(/^,\s*|,\s*$/, '').trim();
-                                } else {
-                                  formattedAddress = user.address;
-                                }
-                              }
-
-                              return (
-                                <tr key={user.id || user.email} className="hover:bg-cream-latte/[0.02] transition-colors">
-                                  <td className="py-4">
-                                    <div className="w-8 h-8 rounded-full bg-warm-gold/10 border border-warm-gold/25 text-warm-gold flex items-center justify-center font-playfair font-black text-xs">
-                                      {initials}
-                                    </div>
-                                  </td>
-                                  <td className="py-4 font-bold font-playfair">{user.name}</td>
-                                  <td className="py-4 font-mono text-cream-latte/65">{user.email}</td>
-                                  <td className="py-4 font-mono text-cream-latte/75">{user.phone || <span className="text-cream-latte/30">N/A</span>}</td>
-                                  <td className="py-4 text-cream-latte/65 max-w-[250px] truncate" title={formattedAddress}>{formattedAddress}</td>
-                                  <td className="py-4 text-cream-latte/40 text-[10px] uppercase font-mono">{user.id || 'N/A'}</td>
-                                </tr>
-                              );
-                            })
                           )}
                         </tbody>
                       </table>
                     </div>
                   </div>
+
                 </div>
               )}
-            </div>
+
+            </main>
+
           </div>
+
+          {/* SLIDE-OUT CUSTOMER DETAILS DRAWER */}
+          <AnimatePresence>
+            {selectedCustomer && (
+              <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+                
+                {/* Backdrop Click Closes Drawer */}
+                <div className="absolute inset-0" onClick={() => setSelectedCustomer(null)} />
+
+                {/* Drawer Container Panel */}
+                <motion.div
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                  className="w-full max-w-[460px] h-screen bg-[#0D0D0D] border-l border-[#D4AF37]/20 shadow-2xl relative flex flex-col justify-between overflow-hidden z-10"
+                >
+                  {/* Glowing light spot */}
+                  <div className="absolute top-0 right-0 w-44 h-44 rounded-full filter blur-[35px] bg-[#D4AF37]/5 pointer-events-none" />
+
+                  {/* Top Bar inside Drawer */}
+                  <div className="p-6 border-b border-[#D4AF37]/15 flex items-center justify-between bg-[#050505]">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-[#D4AF37]/10 border border-[#D4AF37]/20 rounded-xl text-[#D4AF37]">
+                        <Users size={18} className="stroke-[1.5]" />
+                      </div>
+                      <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block text-left">
+                        Connoisseur Profile
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedCustomer(null)}
+                      className="p-2 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors cursor-pointer border border-transparent hover:border-white/10"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Scrollable details view */}
+                  <div className="flex-grow overflow-y-auto p-6 space-y-6 text-left">
+                    
+                    {/* Header: Large initials, Name, Verification badge */}
+                    <div className="flex flex-col items-center text-center pb-6 border-b border-white/5 relative">
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#F4E2B8] text-[#050505] flex items-center justify-center font-playfair font-black text-3xl shadow-[0_0_20px_rgba(212,175,55,0.45)] mb-4">
+                        {selectedCustomer.name ? selectedCustomer.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'C'}
+                      </div>
+                      
+                      <h2 className="font-playfair font-bold text-xl text-white">{selectedCustomer.name}</h2>
+                      <span className="text-xs text-gray-500 font-mono mt-0.5">{selectedCustomer.email}</span>
+
+                      {/* Large status badge */}
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-sans font-bold uppercase tracking-wider border mt-3.5 block ${
+                        selectedCustomer.isVerified 
+                          ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' 
+                          : 'bg-red-950/20 border-red-500/20 text-red-300'
+                      }`}>
+                        {selectedCustomer.displayStatus}
+                      </span>
+                    </div>
+
+                    {/* Toggle user status override */}
+                    <div className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex items-center justify-between gap-4">
+                      <div className="text-left">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Legitimacy Override</span>
+                        <span className="text-[9px] text-gray-500 block mt-0.5">Toggle verification status in database storage</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newStatus = selectedCustomer.isVerified ? 'Unverified Registration' : 'Verified Customer';
+                          handleUpdateUserStatus(selectedCustomer.id || selectedCustomer.email, newStatus);
+                          setSelectedCustomer((prev: any) => ({
+                            ...prev,
+                            isVerified: !prev.isVerified,
+                            displayStatus: newStatus
+                          }));
+                        }}
+                        className={`px-4 py-2 text-[10px] font-sans font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                          selectedCustomer.isVerified 
+                            ? 'bg-red-950/20 border-red-500/20 text-red-300 hover:bg-red-950/40' 
+                            : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400 hover:bg-emerald-950/40'
+                        }`}
+                      >
+                        {selectedCustomer.isVerified ? 'Mark Unverified' : 'Mark Verified'}
+                      </button>
+                    </div>
+
+                    {/* Statistics Cards */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-[#050505] border border-white/5 p-4 rounded-2xl text-left shadow-md">
+                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Total Spendings</span>
+                        <h4 className="text-lg font-bold text-[#F4E2B8] mt-1 font-sans">
+                          ₹{selectedCustomer.totalSpend.toLocaleString('en-IN')}
+                        </h4>
+                      </div>
+                      <div className="bg-[#050505] border border-white/5 p-4 rounded-2xl text-left shadow-md">
+                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block">Shipment Bookings</span>
+                        <h4 className="text-lg font-bold text-white mt-1 font-sans">
+                          {selectedCustomer.orderCount} Orders
+                        </h4>
+                      </div>
+                    </div>
+
+                    {/* Address details */}
+                    <div className="space-y-4">
+                      {/* Billing Address Card */}
+                      <div className="bg-[#050505] border border-[#D4AF37]/15 p-4 rounded-2xl text-left relative">
+                        <span className="absolute top-3 right-3 text-[8px] bg-[#D4AF37]/10 text-[#D4AF37] px-1.5 py-0.5 rounded font-sans font-bold uppercase tracking-wider">
+                          Billing
+                        </span>
+                        <h5 className="font-playfair font-bold text-xs text-white mb-2">Billing Address</h5>
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          {(() => {
+                            if (!selectedCustomer.address) return 'No physical billing address captured in registered profile.';
+                            if (typeof selectedCustomer.address === 'object') {
+                              return `${selectedCustomer.address.doorNo || ''}, ${selectedCustomer.address.area || ''}, ${selectedCustomer.address.city || ''} - ${selectedCustomer.address.pinCode || ''}`.replace(/^,\s*|,\s*$/, '').trim() || 'No address details';
+                            }
+                            return selectedCustomer.address;
+                          })()}
+                        </p>
+                      </div>
+
+                      {/* Shipping Address Card */}
+                      <div className="bg-[#050505] border border-[#D4AF37]/15 p-4 rounded-2xl text-left relative">
+                        <span className="absolute top-3 right-3 text-[8px] bg-white/10 text-white px-1.5 py-0.5 rounded font-sans font-bold uppercase tracking-wider">
+                          Shipping
+                        </span>
+                        <h5 className="font-playfair font-bold text-xs text-white mb-2">Shipping Address</h5>
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          {(() => {
+                            if (!selectedCustomer.address) return 'No physical shipping address captured in registered profile.';
+                            if (typeof selectedCustomer.address === 'object') {
+                              return `${selectedCustomer.address.doorNo || ''}, ${selectedCustomer.address.area || ''}, ${selectedCustomer.address.city || ''} - ${selectedCustomer.address.pinCode || ''}`.replace(/^,\s*|,\s*$/, '').trim() || 'No address details';
+                            }
+                            return selectedCustomer.address;
+                          })()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Order History Timeline */}
+                    <div className="bg-[#050505] border border-[#D4AF37]/15 p-4 rounded-2xl text-left">
+                      <h5 className="font-playfair font-bold text-xs text-[#D4AF37] mb-3 uppercase tracking-wider">
+                        Order History Timeline
+                      </h5>
+                      
+                      <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                        {(() => {
+                          const customerOrders = shipments.filter(s => s.email?.toLowerCase() === selectedCustomer.email?.toLowerCase());
+                          if (customerOrders.length === 0) {
+                            return <p className="text-[10px] text-gray-500 italic">No historical orders recorded for this profile.</p>;
+                          }
+                          return customerOrders.map((ord, idx) => (
+                            <div key={ord.id || idx} className="bg-white/5 border border-white/5 p-3 rounded-xl flex flex-col gap-1.5 hover:border-[#D4AF37]/30 transition-colors">
+                              <div className="flex justify-between items-center">
+                                <span className="font-mono text-[10px] font-bold text-white">{ord.id}</span>
+                                <span className="text-[9px] text-gray-400 font-sans">{ord.date}</span>
+                              </div>
+                              
+                              <div className="text-[10px] text-gray-300 font-sans line-clamp-2">
+                                {ord.productName}
+                              </div>
+                              
+                              <div className="flex justify-between items-center border-t border-white/5 pt-2 mt-1">
+                                <span className="font-sans font-bold text-[#F4E2B8]">₹{ord.amount.toLocaleString('en-IN')}</span>
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-sans font-bold uppercase tracking-wider border ${
+                                  ord.status === 'Delivered' ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' :
+                                  ord.status === 'Processing' ? 'bg-amber-950/20 border-amber-500/20 text-amber-300' :
+                                  'bg-white/5 border border-white/10 text-gray-400'
+                                }`}>
+                                  {ord.status}
+                                </span>
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Metadata contact logs */}
+                    <div className="bg-[#050505] border border-white/5 p-4 rounded-2xl text-xs space-y-2 text-left text-gray-400 font-mono">
+                      <div className="flex justify-between">
+                        <span>Mobile Contact:</span>
+                        <span className="text-white">{selectedCustomer.phone || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Registry Date:</span>
+                        <span className="text-white">{selectedCustomer.dateAdded || 'Feb 2026'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Vault Account ID:</span>
+                        <span className="text-white text-[10px] uppercase truncate max-w-[150px]">{selectedCustomer.id || 'N/A'}</span>
+                      </div>
+                      {selectedCustomer.auditStatus && (
+                        <div className="flex justify-between items-center">
+                          <span>Traceability:</span>
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-sans font-bold uppercase tracking-widest ${
+                            selectedCustomer.auditStatus === 'Original Customer Record' 
+                              ? 'bg-emerald-950/20 border border-emerald-500/20 text-emerald-400' 
+                              : 'bg-purple-950/20 border border-purple-500/20 text-purple-300'
+                          }`}>
+                            {selectedCustomer.auditStatus}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* Drawer Footer controls */}
+                  <div className="p-6 border-t border-[#D4AF37]/15 bg-[#050505] flex gap-3">
+                    <a
+                      href={`tel:${selectedCustomer.phone || ''}`}
+                      className="w-1/2 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-center rounded-xl font-bold transition-all text-xs uppercase tracking-wider cursor-pointer"
+                    >
+                      Call Customer
+                    </a>
+                    <button
+                      onClick={() => setSelectedCustomer(null)}
+                      className="w-1/2 py-3 bg-[#D4AF37] hover:bg-[#F4E2B8] text-[#050505] text-center rounded-xl font-bold transition-all text-xs uppercase tracking-wider cursor-pointer shadow-lg"
+                    >
+                      Close Drawer
+                    </button>
+                  </div>
+
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
         </div>
       )}
 
