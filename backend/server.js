@@ -163,7 +163,7 @@ function verifyPassword(inputPassword, storedPassword, salt) {
 const DEFAULT_PRODUCTS = [
   {
     "id": "just-arabica-beans",
-    "name": "Just Arabica Coffee Beans",
+    "name": "Arabica Coffee Beans",
     "category": "beans",
     "tagline": "100% ORGANIC ARAKU BEANS",
     "roast": "Medium-Dark Roast",
@@ -171,22 +171,27 @@ const DEFAULT_PRODUCTS = [
     "strength": 4,
     "acidity": 2,
     "body": 4,
-    "chicory": "0% Chicory",
-    "tastingNotes": ["Sweet Caramel", "Roasted Almond", "Mild Citrus", "Smoky Oak"],
+    "chicory": "1% Chicory",
+    "tastingNotes": [
+      "Sweet Caramel",
+      "Roasted Almond",
+      "Mild Citrus",
+      "Smoky Oak"
+    ],
     "price": 449,
-    "price750g": 849,
-    "size1Name": "350g",
-    "size2Name": "750g",
     "originalPrice": 499,
-    "image": "/images/Arabica Coffee Beans.webp",
+    "image": "/images/Arabica Coffee Beans.opt.webp",
     "description": "Certified organic, hand-selected Arabica whole beans grown at high altitudes of 1,200 meters by indigenous farmers in the volcanic soil of the Araku Valley. Roasted to medium-dark complexity in micro-batches to unleash an exceptionally low-acidity cup with a velvet, chocolatey finish.",
     "aromaDescription": "Intense and welcoming with sweet hints of brown sugar and warm toasted nuts, settling into a deep, earthy cacao bloom.",
     "bgGradient": "radial-gradient(circle at 50% 40%, rgba(43, 24, 16, 0.45) 0%, rgba(17, 17, 17, 1) 70%)",
-    "glowColor": "rgba(74, 44, 29, 0.45)"
+    "glowColor": "rgba(74, 44, 29, 0.45)",
+    "price750g": 808,
+    "size1Name": "450g",
+    "size2Name": "750g"
   },
   {
     "id": "just-arabica-fine-powder",
-    "name": "Just Arabica Fine Ground Powder",
+    "name": "Arabica Fine Ground Powder",
     "category": "powder",
     "tagline": "MICRO-BATCH ARABICA ESPRESSO GRIND",
     "roast": "Medium Roast",
@@ -195,12 +200,13 @@ const DEFAULT_PRODUCTS = [
     "acidity": 3,
     "body": 3.5,
     "chicory": "0% Chicory",
-    "tastingNotes": ["Cocoa Nibs", "Warm Nutmeg", "Floral Honey"],
+    "tastingNotes": [
+      "Cocoa Nibs",
+      "Warm Nutmeg",
+      "Floral Honey"
+    ],
     "price": 449,
-    "price750g": 849,
-    "size1Name": "350g",
-    "size2Name": "750g",
-    "image": "/images/Arabica Fine Ground Powder.webp",
+    "image": "/images/Arabica Fine Ground Powder.opt.webp",
     "description": "Freshly packed-to-order organic Arabica fine grinds, tailored specifically for high-pressure brewing methods like Espresso machines, Aeropress, or traditional stovetop Moka Pots. Offers a bright, balanced crema with intricate spice profiles.",
     "aromaDescription": "Bright floral top notes interwoven with a sweet, warming fragrance of natural nutmeg and wild mountain honey.",
     "bgGradient": "radial-gradient(circle at 50% 40%, rgba(74, 44, 29, 0.45) 0%, rgba(17, 17, 17, 1) 70%)",
@@ -208,7 +214,7 @@ const DEFAULT_PRODUCTS = [
   },
   {
     "id": "just-arabica-coarse-powder",
-    "name": "Just Arabica Coarse Ground Powder",
+    "name": "Arabica Coarse Ground Powder",
     "category": "powder",
     "tagline": "SLOW IMMERSION DEEP BREW",
     "roast": "Medium-Dark Roast",
@@ -217,12 +223,13 @@ const DEFAULT_PRODUCTS = [
     "acidity": 2,
     "body": 4,
     "chicory": "0% Chicory",
-    "tastingNotes": ["Dark Chocolate", "Smoked Mahogany", "Toasted Hazelnut"],
+    "tastingNotes": [
+      "Dark Chocolate",
+      "Smoked Mahogany",
+      "Toasted Hazelnut"
+    ],
     "price": 449,
-    "price750g": 849,
-    "size1Name": "350g",
-    "size2Name": "750g",
-    "image": "/images/Arabica Coarse Ground Powder.webp",
+    "image": "/images/Arabica Coarse Ground Powder.opt.webp",
     "description": "Organic Arabica beans ground to a coarse, uniform size to prevent over-extraction. Perfect for slow immersion coffee rituals including French Press, Cold Brew drippers, or siphon brewers. Brings out heavy-bodied cocoa depths.",
     "aromaDescription": "Robust, comforting woody aromas mixed with heavy dark cocoa solids and a whisper of slow smoky oak.",
     "bgGradient": "radial-gradient(circle at 50% 40%, rgba(60, 36, 25, 0.45) 0%, rgba(17, 17, 17, 1) 70%)",
@@ -239,12 +246,13 @@ const DEFAULT_PRODUCTS = [
     "acidity": 1,
     "body": 5,
     "chicory": "40% Chicory",
-    "tastingNotes": ["Intense Cacao", "Chicory Sweetness", "Heavy Molasses"],
+    "tastingNotes": [
+      "Intense Cacao",
+      "Chicory Sweetness",
+      "Heavy Molasses"
+    ],
     "price": 299,
-    "price750g": 549,
-    "size1Name": "350g",
-    "size2Name": "750g",
-    "image": "/images/South Indian Filter Coffee Powder.webp",
+    "image": "/images/South Indian Filter Coffee Powder.opt.webp",
     "description": "The definitive traditional South Indian filter coffee blend. Combining 60% high-altitude shade-grown Arabica and Robusta beans from Araku with 40% premium, slow-roasted French chicory. Delivers an incredibly thick, strong, and highly aromatic morning cup that pairs flawlessly with warm frothed milk.",
     "aromaDescription": "Pungent, highly concentrated and dark roasted with heavy caramel sugars, sweet malted chicory, and molasses.",
     "bgGradient": "radial-gradient(circle at 50% 40%, rgba(74, 50, 35, 0.45) 0%, rgba(17, 17, 17, 1) 70%)",
@@ -252,7 +260,7 @@ const DEFAULT_PRODUCTS = [
   },
   {
     "id": "just-arabica-cold-brew",
-    "name": "Just Arabica Cold Brew Concentrate",
+    "name": "Arabica Cold Brew Concentrate",
     "category": "specialty",
     "tagline": "24-HOUR SLOW DRIPPED NECTAR",
     "roast": "Cold Steepted",
@@ -261,12 +269,13 @@ const DEFAULT_PRODUCTS = [
     "acidity": 1,
     "body": 4,
     "chicory": "0% Chicory",
-    "tastingNotes": ["Vanilla Pod", "Floral Jasmine", "Crisp Toffee"],
+    "tastingNotes": [
+      "Vanilla Pod",
+      "Floral Jasmine",
+      "Crisp Toffee"
+    ],
     "price": 399,
-    "price750g": 749,
-    "size1Name": "350g",
-    "size2Name": "750g",
-    "image": "/images/Arabica Cold Brew Concentrate.webp",
+    "image": "/images/Arabica Cold Brew Concentrate.opt.webp",
     "description": "Our signature cold-brewed nectar, slow-extracted over 24 hours in cold spring water from pure organic Araku Arabica beans. Yields an incredibly smooth, naturally sweet concentrate containing twice the caffeine kick of hot brew, with practically zero bitterness or acidity.",
     "aromaDescription": "Soft and delicate with undercurrents of fragrant night jasmine, vanilla bean pods, and light buttery toffee.",
     "bgGradient": "radial-gradient(circle at 50% 40%, rgba(83, 59, 40, 0.45) 0%, rgba(17, 17, 17, 1) 70%)",
@@ -274,28 +283,112 @@ const DEFAULT_PRODUCTS = [
   }
 ];
 
-// Initialize JSON files with seed data if they don't exist
+// DEFAULT USERS SEED DATA
+const DEFAULT_USERS = [
+  {
+    "id": "adm-1",
+    "name": "tribalcoffee",
+    "email": "admin@tribalcoffee.com",
+    "password": "password123",
+    "role": "Super Admin",
+    "status": "Active",
+    "dateAdded": "01/01/2026"
+  },
+  {
+    "id": "adm-oc-1",
+    "name": "System Administrator",
+    "email": "admin@backbenchretail.com",
+    "password": "0052ed97e1eb90b442459dea9a655092ce041ef1",
+    "salt": "150385a0b",
+    "role": "Super Admin",
+    "status": "Active",
+    "dateAdded": "01/01/2026"
+  },
+  {
+    "id": "wp-716",
+    "name": "konapalask",
+    "email": "saikirankonapala26@gmail.com",
+    "password": "password123",
+    "role": "Super Admin",
+    "status": "Active",
+    "dateAdded": "01/01/2026"
+  }
+];
+
+// Initialize JSON files with seed data if they don't exist, and self-heal missing/outdated entities
 const initializeJSONDatabase = () => {
+  // 1. Sync default seed users
   const users = readJSONFile(USERS_FILE_PATH, []);
-  if (users.length === 0) {
-    writeJSONFile(USERS_FILE_PATH, [
-      {
-        id: 'adm-1',
-        name: 'tribalcoffee',
-        email: 'admin@tribalcoffee.com',
-        password: 'password123',
-        role: 'Super Admin'
+  let usersChanged = false;
+
+  DEFAULT_USERS.forEach(defUser => {
+    const idx = users.findIndex(u => u.email.toLowerCase().trim() === defUser.email.toLowerCase().trim());
+    if (idx === -1) {
+      users.push(defUser);
+      usersChanged = true;
+    } else {
+      // Safely update password, role, name, and status if they mismatch
+      const existing = users[idx];
+      if (
+        existing.password !== defUser.password ||
+        existing.role !== defUser.role ||
+        existing.name !== defUser.name ||
+        existing.status !== defUser.status ||
+        existing.salt !== defUser.salt
+      ) {
+        users[idx] = {
+          ...existing,
+          ...defUser
+        };
+        usersChanged = true;
       }
-    ]);
+    }
+  });
+
+  if (usersChanged || users.length === 0) {
+    writeJSONFile(USERS_FILE_PATH, users);
   }
 
+  // 2. Sync products catalog
   const products = readJSONFile(DATA_FILE_PATH, []);
-  if (products.length === 0) {
-    writeJSONFile(DATA_FILE_PATH, DEFAULT_PRODUCTS);
+  let productsChanged = false;
+
+  DEFAULT_PRODUCTS.forEach(defProd => {
+    const idx = products.findIndex(p => p.id === defProd.id);
+    if (idx === -1) {
+      products.push(defProd);
+      productsChanged = true;
+    } else {
+      // Guarantee all specs, prices, and sizing labels are updated to latest versions
+      const existing = products[idx];
+      if (
+        existing.name !== defProd.name ||
+        existing.price !== defProd.price ||
+        existing.originalPrice !== defProd.originalPrice ||
+        existing.price750g !== defProd.price750g ||
+        existing.size1Name !== defProd.size1Name ||
+        existing.size2Name !== defProd.size2Name ||
+        existing.chicory !== defProd.chicory ||
+        existing.roast !== defProd.roast ||
+        existing.tagline !== defProd.tagline ||
+        existing.image !== defProd.image ||
+        existing.description !== defProd.description
+      ) {
+        products[idx] = {
+          ...existing,
+          ...defProd
+        };
+        productsChanged = true;
+      }
+    }
+  });
+
+  if (productsChanged || products.length === 0) {
+    writeJSONFile(DATA_FILE_PATH, products);
   }
 
   readJSONFile(BOOKINGS_FILE_PATH, []);
-  console.log('>>> Local JSON Database initialized successfully!');
+  console.log('>>> Local JSON Database initialized and self-healed successfully!');
 };
 
 initializeJSONDatabase();

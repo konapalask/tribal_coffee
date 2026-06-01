@@ -583,6 +583,7 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
     setLoading(true);
 
     const emailLower = email.toLowerCase().trim();
+    const isAdmin = emailLower === 'admin@tribalcoffee.com' || emailLower === 'admin@tribalcoffee.in';
     const isAdminDevBackdoor = emailLower === 'admin@tribalcoffee.in';
 
     if (mode === 'login') {
