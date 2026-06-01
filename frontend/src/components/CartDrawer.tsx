@@ -5,14 +5,15 @@ import { type RealProduct, API_BASE_URL } from '../services/db';
 export interface CartItem {
   product: RealProduct;
   quantity: number;
+  weight: string;
 }
 
 interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   cartItems: CartItem[];
-  onUpdateQuantity: (productId: string, delta: number) => void;
-  onRemoveItem: (productId: string) => void;
+  onUpdateQuantity: (productId: string, weight: string, delta: number) => void;
+  onRemoveItem: (productId: string, weight: string) => void;
   onCheckout: () => void;
 }
 
@@ -26,14 +27,15 @@ export default function CartDrawer({
 }: CartDrawerProps) {
   // Parse subtotal
   const subtotal = cartItems.reduce((acc, item) => {
-    return acc + item.product.price * item.quantity;
+    const price = item.weight === (item.product.size2Name || '750g') && item.product.price750g ? item.product.price750g : item.product.price;
+    return acc + price * item.quantity;
   }, 0);
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: isOpen ? 1 : 0 }}
-      className={`fixed inset-0 z-50 overflow-hidden transition-all duration-300 ${
+      className={`fixed inset-0 z-[100] overflow-hidden transition-all duration-300 ${
         isOpen ? 'pointer-events-auto' : 'pointer-events-none'
       }`}
       id="cart-drawer-wrapper"
@@ -84,8 +86,8 @@ export default function CartDrawer({
           ) : (
             cartItems.map((item) => (
               <div 
-                key={item.product.id} 
-                id={`cart-item-${item.product.id}`}
+                key={`${item.product.id}-${item.weight}`} 
+                id={`cart-item-${item.product.id}-${item.weight}`}
                 className="flex gap-4 border-b border-warm-gold/5 pb-6 last:border-none"
               >
                 {/* Product Image */}
@@ -104,7 +106,7 @@ export default function CartDrawer({
                       {item.product.name}
                     </h4>
                     <p className="text-[10px] text-warm-gold font-sans uppercase tracking-wider mb-2">
-                      {item.product.roast}
+                      {item.product.roast} &bull; {item.weight}
                     </p>
                   </div>
 
@@ -112,8 +114,8 @@ export default function CartDrawer({
                     {/* Quantity controls */}
                     <div className="flex items-center border border-warm-gold/20 rounded-lg overflow-hidden bg-espresso/45">
                       <button
-                        onClick={() => onUpdateQuantity(item.product.id, -1)}
-                        id={`cart-minus-${item.product.id}`}
+                        onClick={() => onUpdateQuantity(item.product.id, item.weight, -1)}
+                        id={`cart-minus-${item.product.id}-${item.weight}`}
                         className="px-2.5 py-1 text-cream-latte/60 hover:text-warm-gold hover:bg-cream-latte/5 transition-colors cursor-pointer"
                         aria-label="Decrease quantity"
                       >
@@ -123,8 +125,8 @@ export default function CartDrawer({
                         {item.quantity}
                       </span>
                       <button
-                        onClick={() => onUpdateQuantity(item.product.id, 1)}
-                        id={`cart-plus-${item.product.id}`}
+                        onClick={() => onUpdateQuantity(item.product.id, item.weight, 1)}
+                        id={`cart-plus-${item.product.id}-${item.weight}`}
                         className="px-2.5 py-1 text-cream-latte/60 hover:text-warm-gold hover:bg-cream-latte/5 transition-colors cursor-pointer"
                         aria-label="Increase quantity"
                       >
@@ -135,11 +137,11 @@ export default function CartDrawer({
                     {/* Price & Remove */}
                     <div className="flex items-center gap-3">
                       <span className="font-bebas text-lg text-warm-gold tracking-widest">
-                        ₹{(item.product.price * item.quantity).toFixed(2)}
+                        ₹{((item.weight === (item.product.size2Name || '750g') && item.product.price750g ? item.product.price750g : item.product.price) * item.quantity).toFixed(2)}
                       </span>
                       <button
-                        onClick={() => onRemoveItem(item.product.id)}
-                        id={`cart-remove-${item.product.id}`}
+                        onClick={() => onRemoveItem(item.product.id, item.weight)}
+                        id={`cart-remove-${item.product.id}-${item.weight}`}
                         className="text-[10px] font-sans text-cream-latte/45 hover:text-red-400 transition-colors uppercase tracking-widest cursor-pointer"
                         aria-label="Remove item"
                       >

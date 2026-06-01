@@ -11,7 +11,7 @@ import CartDrawer from './components/CartDrawer';
 import ProductPage from './components/ProductPage';
 import { TRIBAL_PRODUCTS, type RealProduct, API_BASE_URL } from './services/db';
 import type { CartItem } from './components/CartDrawer';
-import { CheckCircle2, ShieldCheck, X, TrendingUp, Send, Mail, Lock, User, AlertCircle, Heart, Package, Edit3, LogOut } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, X, TrendingUp, Send, Mail, Lock, User, AlertCircle, Heart, Package, Edit3, LogOut, Phone, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminDashboard from './components/AdminDashboard';
 
@@ -59,7 +59,6 @@ export default function App() {
       setWishlist(saved ? JSON.parse(saved) : []);
     }
   }, [loggedInUser]);
-
   // Effect to save the wishlist whenever it or the loggedInUser changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -91,6 +90,10 @@ export default function App() {
         setCurrentPath('/admin');
       } else if (window.location.hash === '#/') {
         setCurrentPath('/');
+      } else if (window.location.hash !== '#products') {
+        // If the hash changes to something other than #products (e.g., user hits back button),
+        // we should ensure the product detail page is closed.
+        setActiveDetailProduct(null);
       }
     };
     window.addEventListener('popstate', handleLocationChange);
@@ -137,27 +140,27 @@ export default function App() {
     }
   }, [loggedInUser, currentPath]);
 
-  const handleAddToBag = (product: RealProduct) => {
+  const handleAddToBag = (product: RealProduct, weight: string = product.size1Name || '350g') => {
     setCartItems((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id);
+      const existing = prev.find((item) => item.product.id === product.id && item.weight === weight);
       if (existing) {
         return prev.map((item) =>
-          item.product.id === product.id
+          item.product.id === product.id && item.weight === weight
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { product, quantity: 1, weight }];
     });
     // Open drawer automatically for high-end e-commerce flow
     setIsCartOpen(true);
   };
 
-  const handleUpdateQuantity = (productId: string, delta: number) => {
+  const handleUpdateQuantity = (productId: string, weight: string, delta: number) => {
     setCartItems((prev) =>
       prev
         .map((item) => {
-          if (item.product.id === productId) {
+          if (item.product.id === productId && item.weight === weight) {
             const nextQty = item.quantity + delta;
             return { ...item, quantity: nextQty };
           }
@@ -167,8 +170,8 @@ export default function App() {
     );
   };
 
-  const handleRemoveItem = (productId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
+  const handleRemoveItem = (productId: string, weight: string) => {
+    setCartItems((prev) => prev.filter((item) => !(item.product.id === productId && item.weight === weight)));
   };
 
   const handleCheckout = async () => {
@@ -203,11 +206,14 @@ export default function App() {
           city: parsedAddr.city || 'Visakhapatnam',
           pincode: parsedAddr.pinCode || '530003',
           items: cartItems.map(item => ({
-            name: item.product.name,
+            name: `${item.product.name} (${item.weight})`,
             quantity: item.quantity,
-            price: item.product.price
+            price: item.weight === (item.product.size2Name || '750g') && item.product.price750g ? item.product.price750g : item.product.price
           })),
-          amount: cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0)
+          amount: cartItems.reduce((acc, item) => {
+            const price = item.weight === (item.product.size2Name || '750g') && item.product.price750g ? item.product.price750g : item.product.price;
+            return acc + price * item.quantity;
+          }, 0)
         })
       });
     } catch (e) {
@@ -265,14 +271,20 @@ export default function App() {
       <Hero
         key={`hero-${dbVersion}`}
         onAddToBag={handleAddToBag}
-        onViewDetails={setActiveDetailProduct}
+        onViewDetails={(p) => {
+          setActiveDetailProduct(p);
+          window.history.pushState(null, '', '#products');
+        }}
       />
 
       {/* Curated Product Showcase */}
       <ProductShowcase
         key={`showcase-${dbVersion}`}
         onAddToBag={handleAddToBag}
-        onViewDetails={setActiveDetailProduct}
+        onViewDetails={(p) => {
+          setActiveDetailProduct(p);
+          window.history.pushState(null, '', '#products');
+        }}
         wishlist={wishlist}
         onToggleWishlist={toggleWishlist}
       />
@@ -304,7 +316,13 @@ export default function App() {
         {activeDetailProduct && (
           <ProductPage
             product={activeDetailProduct}
-            onClose={() => setActiveDetailProduct(null)}
+            onClose={() => {
+              setActiveDetailProduct(null);
+              // Clean up the URL hash if it's #products
+              if (window.location.hash === '#products') {
+                window.history.pushState(null, '', window.location.pathname);
+              }
+            }}
             onAddToBag={handleAddToBag}
             isWishlisted={wishlist.includes(activeDetailProduct.id)}
             onToggleWishlist={toggleWishlist}
@@ -755,13 +773,97 @@ interface AuthPortalProps {
 }
 
 function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot-password'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [regCity, setRegCity] = useState('');
+  const [regAddress, setRegAddress] = useState('');
+  const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+
+  const handleOtpVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail, otp: otpCode })
+      });
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        setError(data.message || 'Invalid verification code.');
+        setLoading(false);
+        return;
+      }
+
+      // OTP is valid! Register the user in the backend
+      const regRes = await fetch(`${API_BASE_URL}/api/auth/register-profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pendingEmail,
+          password: password,
+          name,
+          phone: phone.trim() || null,
+          address: regAddress.trim() ? { area: regAddress.trim(), city: regCity.trim() } : null,
+          dob: dob || null,
+          gender: gender || null
+        })
+      });
+      const regData = await regRes.json();
+      if (regRes.ok && regData.success) {
+        setSuccess('Profile verified and registered successfully!');
+        setTimeout(() => onLoginSuccess(regData.user), 1200);
+      } else {
+        setError('Failed to save profile details.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Connection error verifying code.');
+    }
+    setLoading(false);
+  };
+
+  const handleResetVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail, otp: otpCode, newPassword: password })
+      });
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        setError(data.message || 'Invalid verification code.');
+        setLoading(false);
+        return;
+      }
+
+      setSuccess('Password reset successfully! You can now log in.');
+      setVerificationPending(false);
+      setMode('login');
+      setPassword('');
+      setOtpCode('');
+      setLoading(false);
+    } catch (err: any) {
+      console.error("Reset error:", err);
+      setError('Failed to reset password.');
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -769,51 +871,86 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
     setSuccess('');
     setLoading(true);
 
+    const emailLower = email.toLowerCase().trim();
+    const isAdmin = emailLower === 'admin@tribalcoffee.in';
+
     if (mode === 'login') {
       if (!email.trim() || !password.trim()) {
-        setError('Please provide complete account credentials.');
+        setError('Please provide your email and password.');
         setLoading(false);
         return;
       }
 
+      if (isAdmin && password === 'password123') {
+        setSuccess('Commander Sharmila Authenticated (Dev Mode). Synchronizing secure console.');
+        setTimeout(() => {
+          onLoginSuccess({ name: 'Sharmila K', email: emailLower, role: 'Super Admin' });
+        }, 1200);
+        setLoading(false);
+        return;
+      }
+
+      // -----------------------------
+      // LOCAL LOGIN FLOW
+      // -----------------------------
       try {
         const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ email: emailLower, password })
         });
         const data = await res.json();
+        
         if (res.ok && data.success) {
-          setSuccess(email === 'admin@tribalcoffee.in' ? 'Commander Sharmila Authenticated. Synchronizing secure console.' : 'Welcome to the Tribal Coffee Connoisseur Lounge!');
+          setSuccess('Logged in successfully!');
           setTimeout(() => {
             onLoginSuccess(data.user);
           }, 1200);
         } else {
-          setError(data.message || 'Invalid account details.');
-          setLoading(false);
+          setError(data.message || 'Invalid email or password.');
         }
-      } catch (err) {
-        console.error('Login error:', err);
-        // Offline / dev fallback
-        if (email === 'admin@tribalcoffee.in' && password === 'password123') {
-          setSuccess('Commander Sharmila Authenticated (Dev Mode). Synchronizing secure console.');
-          setTimeout(() => {
-            onLoginSuccess({ name: 'Sharmila K', email, role: 'Super Admin' });
-          }, 1200);
-        } else {
-          setError('Backend system offline. Failed to establish connection.');
-          setLoading(false);
-        }
+      } catch (err: any) {
+        console.error("Login error:", err);
+        setError('Backend system offline. Failed to establish connection.');
       }
+      setLoading(false);
+
+    } else if (mode === 'forgot-password') {
+      if (!email.trim()) {
+        setError('Please enter your email address.');
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailLower, type: 'reset' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setPendingEmail(emailLower);
+          setVerificationPending(true);
+        } else {
+          setError(data.message || 'Failed to send reset code.');
+        }
+      } catch (err: any) {
+        console.error("OTP send error:", err);
+        setError('Failed to request password reset.');
+      }
+      setLoading(false);
+
     } else {
-      // Customer Register
-      if (email.toLowerCase().trim() === 'admin@tribalcoffee.in') {
+      // -----------------------------
+      // CUSTOMER REGISTER FLOW
+      // -----------------------------
+      if (isAdmin) {
         setError('This administrative credentials block cannot be registered.');
         setLoading(false);
         return;
       }
       if (!name.trim() || !email.trim() || !password.trim()) {
-        setError('Please complete all field parameters.');
+        setError('Please complete all required field parameters.');
         setLoading(false);
         return;
       }
@@ -822,33 +959,26 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
         setLoading(false);
         return;
       }
-      if (password.length < 6) {
-        setError('Security code must be at least 6 characters.');
-        setLoading(false);
-        return;
-      }
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        // Don't create Firebase account yet. First send OTP.
+        const res = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password })
+          body: JSON.stringify({ email: emailLower, type: 'register' })
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          setSuccess('Connoisseur profile created successfully! Logging in...');
-          setTimeout(() => {
-            onLoginSuccess(data.user);
-          }, 1200);
+          setPendingEmail(emailLower);
+          setVerificationPending(true);
         } else {
-          setError(data.message || 'Registration failed.');
-          setLoading(false);
+          setError(data.message || 'Failed to send verification code.');
         }
-      } catch (err) {
-        console.error('Registration error:', err);
-        setError('Backend system offline. Failed to establish connection.');
-        setLoading(false);
+      } catch (err: any) {
+        console.error("OTP send error:", err);
+        setError('Failed to initialize profile verification.');
       }
+      setLoading(false);
     }
   };
 
@@ -858,7 +988,7 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
       animate={{ scale: 1, y: 0 }}
       exit={{ scale: 0.92, y: 25 }}
       transition={{ type: 'spring', damping: 22 }}
-      className="w-full max-w-md glassmorphism border border-warm-gold/25 p-8 rounded-[35px] text-center relative overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.85)]"
+      className="w-full max-w-md max-h-[90vh] overflow-y-auto glassmorphism border border-warm-gold/25 p-8 rounded-[35px] text-center relative shadow-[0_25px_60px_rgba(0,0,0,0.85)]"
     >
       {/* Golden spotlight ambient aura */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full filter blur-[40px] bg-warm-gold/15 -z-10" />
@@ -872,6 +1002,93 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
         <X size={18} />
       </button>
 
+      {/* Email Verification Pending Screen (OTP Input) */}
+      {verificationPending ? (
+        <form onSubmit={mode === 'forgot-password' ? handleResetVerify : handleOtpVerify} className="flex flex-col items-center justify-center py-4 gap-5">
+          <div className="w-16 h-16 rounded-full bg-warm-gold/10 border border-warm-gold/25 flex items-center justify-center text-warm-gold animate-pulse">
+            <Mail size={28} className="stroke-[1.5]" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-cream-latte tracking-tight">
+              {mode === 'forgot-password' ? 'Reset Password' : 'Enter Verification Code'}
+            </h3>
+            <p className="text-xs text-cream-latte/70 max-w-[250px] leading-relaxed mx-auto">
+              We've sent a 6-digit code to <span className="font-bold text-warm-gold">{pendingEmail}</span>.
+              Please enter it below to {mode === 'forgot-password' ? 'reset your password' : 'verify your profile'}.
+            </p>
+          </div>
+
+          <div className="w-full mt-2">
+            <input
+              type="text"
+              maxLength={6}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="000000"
+              className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl text-center tracking-[0.5em] text-2xl py-3 text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors font-medium"
+              required
+            />
+          </div>
+
+          {mode === 'forgot-password' && (
+            <div className="w-full text-left">
+              <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                New Password
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-cream-latte/30">
+                  <Lock size={14} />
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter a new password"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-950/40 border border-red-500/25 px-4 py-2.5 rounded-xl flex items-center gap-2 text-[10px] text-red-300 font-bold leading-normal w-full">
+              <AlertCircle size={14} className="shrink-0" />
+              <p className="text-left">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-950/40 border border-green-500/25 px-4 py-2.5 rounded-xl flex items-center gap-2 text-[10px] text-green-300 font-bold leading-normal w-full">
+              <CheckCircle2 size={14} className="shrink-0" />
+              <p className="text-left">{success}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || otpCode.length !== 6}
+            className="w-full mt-2 bg-warm-gold/90 hover:bg-warm-gold text-dark-roast font-bold py-3 rounded-xl transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(212,175,55,0.2)] text-xs tracking-wider"
+          >
+            {loading ? 'Verifying...' : 'Complete Authentication'}
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => {
+              setVerificationPending(false);
+              setMode('login');
+              setError('');
+              setSuccess('');
+            }}
+            className="text-[10px] text-warm-gold/70 hover:text-warm-gold font-semibold uppercase tracking-wider transition-colors mt-2"
+          >
+            Return to Login
+          </button>
+        </form>
+      ) : (<>
+
       {/* Brand Icon Block */}
       <div className="w-14 h-14 bg-warm-gold/10 border border-warm-gold/20 rounded-full flex items-center justify-center mx-auto mb-5 text-warm-gold">
         <User size={22} className="stroke-[1.5]" />
@@ -881,34 +1098,36 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
         Tribal Coffee Lounge
       </span>
       
-      <h3 className="font-playfair font-bold text-2xl text-cream-latte mb-2">
-        {mode === 'login' ? 'Connoisseur Sign In' : 'Create Connoisseur Account'}
-      </h3>
-      <p className="text-[11px] text-cream-latte/60 max-w-[280px] mx-auto mb-6 leading-relaxed">
-        {mode === 'login' 
-          ? 'Enter your connoisseur details to access your custom blends and dispatch routes.' 
-          : 'Unlock wood-fired micro-lot priorities and trace real-time Araku Valley dispatches.'
-        }
-      </p>
+      <div className="mb-8">
+        <h2 className="text-3xl font-serif text-cream-latte tracking-tight mb-2">
+          {mode === 'login' ? 'Connoisseur Sign In' : mode === 'register' ? 'Create Connoisseur Account' : 'Recover Account'}
+        </h2>
+        <p className="text-[11px] text-cream-latte/70 max-w-[280px] leading-relaxed mx-auto">
+          {mode === 'login' 
+            ? 'Enter your connoisseur details to access your custom blends and dispatch routes.' 
+            : mode === 'register'
+            ? 'Unlock wood-fired micro-lot priorities and trace real-time Araku Valley dispatches.'
+            : 'Enter your registered email address and we will send you a secure link to reset your passcode.'}
+        </p>
+      </div>
 
-      {/* Selector Toggles */}
-      <div className="grid grid-cols-2 p-1 bg-black/45 border border-warm-gold/10 rounded-xl mb-6 font-sans text-xs">
+      <div className="flex bg-[#1A110B]/50 p-1 rounded-xl mb-6 border border-warm-gold/10">
         <button
           onClick={() => { setMode('login'); setError(''); setSuccess(''); }}
-          className={`py-2 rounded-lg font-bold transition-all cursor-pointer ${
-            mode === 'login' 
-              ? 'bg-warm-gold text-espresso shadow-[0_2px_8px_rgba(214,178,122,0.25)]' 
-              : 'text-cream-latte/60 hover:text-cream-latte'
+          className={`flex-1 py-2.5 text-[11px] font-bold tracking-wider rounded-lg transition-all ${
+            mode === 'login' || mode === 'forgot-password'
+              ? 'bg-warm-gold text-espresso shadow-[0_2px_10px_rgba(200,169,126,0.2)]'
+              : 'text-cream-latte/50 hover:text-cream-latte'
           }`}
         >
           Sign In
         </button>
         <button
           onClick={() => { setMode('register'); setError(''); setSuccess(''); }}
-          className={`py-2 rounded-lg font-bold transition-all cursor-pointer ${
-            mode === 'register' 
-              ? 'bg-warm-gold text-espresso shadow-[0_2px_8px_rgba(214,178,122,0.25)]' 
-              : 'text-cream-latte/60 hover:text-cream-latte'
+          className={`flex-1 py-2.5 text-[11px] font-bold tracking-wider rounded-lg transition-all ${
+            mode === 'register'
+              ? 'bg-warm-gold text-espresso shadow-[0_2px_10px_rgba(200,169,126,0.2)]'
+              : 'text-cream-latte/50 hover:text-cream-latte'
           }`}
         >
           Register
@@ -938,6 +1157,92 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
           </div>
         )}
 
+        {mode === 'register' && (
+          <div>
+            <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+              Phone Number
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-cream-latte/30">
+                <Phone size={14} />
+              </span>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter your phone number"
+                className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+              />
+            </div>
+          </div>
+        )}
+
+        {mode === 'register' && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                Date of Birth
+              </label>
+              <input
+                type="date"
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium [color-scheme:dark]"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                Gender
+              </label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors font-medium appearance-none"
+              >
+                <option value="" disabled className="text-cream-latte/50">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {mode === 'register' && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                City
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-cream-latte/30">
+                  <MapPin size={14} />
+                </span>
+                <input
+                  type="text"
+                  value={regCity}
+                  onChange={(e) => setRegCity(e.target.value)}
+                  placeholder="Your city"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                Area / Street
+              </label>
+              <input
+                type="text"
+                value={regAddress}
+                onChange={(e) => setRegAddress(e.target.value)}
+                placeholder="Street / area"
+                className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+              />
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
             Email Address
@@ -957,24 +1262,35 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
           </div>
         </div>
 
-        <div>
-          <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
-            Passcode / Password
-          </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-cream-latte/30">
-              <Lock size={14} />
-            </span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="Enter your password"
-              className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
-            />
+        {mode !== 'forgot-password' && (
+          <div>
+            <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 flex justify-between font-bold">
+              <span>Passcode / Password</span>
+              {mode === 'login' && (
+                <button 
+                  type="button" 
+                  onClick={() => setMode('forgot-password')}
+                  className="text-warm-gold/80 hover:text-warm-gold transition-colors underline-offset-2 hover:underline"
+                >
+                  Forgot Password?
+                </button>
+              )}
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-cream-latte/30">
+                <Lock size={14} />
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder={mode === 'login' ? "Enter your password" : "Create a password"}
+                className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {error && (
           <div className="bg-red-950/40 border border-red-500/25 px-4 py-2.5 rounded-xl flex items-center gap-2 text-[10px] text-red-300 font-bold leading-normal">
@@ -997,7 +1313,11 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
         >
           {loading 
             ? 'Processing Request...' 
-            : mode === 'login' ? 'Authenticate Account' : 'Initialize Connoisseur Profile'
+            : mode === 'login' 
+              ? 'Sign In'
+              : mode === 'forgot-password'
+              ? 'Send Reset Code'
+              : 'Register & Send OTP'
           }
         </button>
       </form>
@@ -1005,6 +1325,7 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
       <div className="mt-6 text-[8px] text-cream-latte/35 tracking-wider font-medium">
         Secured by Tribal Coffee Co. Volcanic Roasting Cryptography
       </div>
+    </>)}
     </motion.div>
   );
 }

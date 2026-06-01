@@ -15,6 +15,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTextExpanded, setIsTextExpanded] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -26,6 +27,11 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
       return () => window.removeEventListener('resize', handleResize);
     }
   }, []);
+  
+  // Reset text expansion when product changes
+  useEffect(() => {
+    setIsTextExpanded(false);
+  }, [activeIndex]);
   
   // Real-time mouse tilt properties
   const [tiltStyle, setTiltStyle] = useState({ transform: 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)' });
@@ -359,9 +365,19 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
               </div>
 
               {/* Description */}
-              <p className="text-sm md:text-base text-cream-latte/70 max-w-md font-sans leading-relaxed mb-6">
-                {activeProduct?.description || ''}
-              </p>
+              <div className="mb-6 max-w-md">
+                <p className={`text-sm md:text-base text-cream-latte/70 font-sans leading-relaxed ${isTextExpanded ? '' : 'line-clamp-2'}`}>
+                  {activeProduct?.description || ''}
+                </p>
+                {activeProduct?.description && activeProduct.description.length > 120 && (
+                  <button 
+                    onClick={() => setIsTextExpanded(!isTextExpanded)} 
+                    className="text-xs text-warm-gold mt-1.5 font-bold hover:text-white transition-colors cursor-pointer"
+                  >
+                    {isTextExpanded ? 'Read Less' : 'Read More...'}
+                  </button>
+                )}
+              </div>
 
               {/* Tasting Notes */}
               <div className="flex flex-wrap gap-2 mb-8">
@@ -597,6 +613,24 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           </button>        </div>
 
       </div>
+
+      {/* Scroll Down Indicator */}
+      <div className="absolute bottom-36 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center z-50">
+        <a 
+          href="#shop" 
+          className="text-[9px] font-sans tracking-[0.3em] text-warm-gold/50 hover:text-warm-gold uppercase font-bold flex flex-col items-center gap-2 transition-colors group"
+          onClick={(e) => {
+            e.preventDefault();
+            document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+        >
+          <span>To Shop</span>
+          <div className="w-6 h-10 border border-warm-gold/30 rounded-full flex justify-center p-1 group-hover:border-warm-gold/80 transition-colors">
+            <div className="w-1 h-2 bg-warm-gold rounded-full animate-bounce mt-1" />
+          </div>
+        </a>
+      </div>
+
     </section>
   );
 }

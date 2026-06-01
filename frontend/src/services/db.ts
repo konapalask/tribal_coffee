@@ -10,7 +10,10 @@ export interface RealProduct {
   body: number; // out of 5
   chicory: string; // e.g. "0%" or "40%"
   tastingNotes: string[];
-  price: number; // In ₹ (INR)
+  price: number; // In ₹ (INR) for Base Size
+  price750g?: number; // In ₹ (INR) for Large Size
+  size1Name?: string; // e.g. "350g"
+  size2Name?: string; // e.g. "750g"
   originalPrice?: number; // In ₹ (INR)
   image: string;
   description: string;
@@ -35,6 +38,9 @@ export const TRIBAL_PRODUCTS: RealProduct[] = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Sweet Caramel", "Roasted Almond", "Mild Citrus", "Smoky Oak"],
     "price": 449,
+    "price750g": 849,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "originalPrice": 499,
     "image": "/images/Arabica Coffee Beans.opt.webp",
     "description": "Certified organic, hand-selected Arabica whole beans grown at high altitudes of 1,200 meters by indigenous farmers in the volcanic soil of the Araku Valley. Roasted to medium-dark complexity in micro-batches to unleash an exceptionally low-acidity cup with a velvet, chocolatey finish.",
@@ -55,6 +61,9 @@ export const TRIBAL_PRODUCTS: RealProduct[] = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Cocoa Nibs", "Warm Nutmeg", "Floral Honey"],
     "price": 449,
+    "price750g": 849,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/Arabica Fine Ground Powder.opt.webp",
     "description": "Freshly packed-to-order organic Arabica fine grinds, tailored specifically for high-pressure brewing methods like Espresso machines, Aeropress, or traditional stovetop Moka Pots. Offers a bright, balanced crema with intricate spice profiles.",
     "aromaDescription": "Bright floral top notes interwoven with a sweet, warming fragrance of natural nutmeg and wild mountain honey.",
@@ -74,6 +83,9 @@ export const TRIBAL_PRODUCTS: RealProduct[] = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Dark Chocolate", "Smoked Mahogany", "Toasted Hazelnut"],
     "price": 449,
+    "price750g": 849,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/Arabica Coarse Ground Powder.opt.webp",
     "description": "Organic Arabica beans ground to a coarse, uniform size to prevent over-extraction. Perfect for slow immersion coffee rituals including French Press, Cold Brew drippers, or siphon brewers. Brings out heavy-bodied cocoa depths.",
     "aromaDescription": "Robust, comforting woody aromas mixed with heavy dark cocoa solids and a whisper of slow smoky oak.",
@@ -93,6 +105,9 @@ export const TRIBAL_PRODUCTS: RealProduct[] = [
     "chicory": "40% Chicory",
     "tastingNotes": ["Intense Cacao", "Chicory Sweetness", "Heavy Molasses"],
     "price": 299,
+    "price750g": 549,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/South Indian Filter Coffee Powder.opt.webp",
     "description": "The definitive traditional South Indian filter coffee blend. Combining 60% high-altitude shade-grown Arabica and Robusta beans from Araku with 40% premium, slow-roasted French chicory. Delivers an incredibly thick, strong, and highly aromatic morning cup that pairs flawlessly with warm frothed milk.",
     "aromaDescription": "Pungent, highly concentrated and dark roasted with heavy caramel sugars, sweet malted chicory, and molasses.",
@@ -112,6 +127,9 @@ export const TRIBAL_PRODUCTS: RealProduct[] = [
     "chicory": "0% Chicory",
     "tastingNotes": ["Vanilla Pod", "Floral Jasmine", "Crisp Toffee"],
     "price": 399,
+    "price750g": 749,
+    "size1Name": "350g",
+    "size2Name": "750g",
     "image": "/images/Arabica Cold Brew Concentrate.opt.webp",
     "description": "Our signature cold-brewed nectar, slow-extracted over 24 hours in cold spring water from pure organic Araku Arabica beans. Yields an incredibly smooth, naturally sweet concentrate containing twice the caffeine kick of hot brew, with practically zero bitterness or acidity.",
     "aromaDescription": "Soft and delicate with undercurrents of fragrant night jasmine, vanilla bean pods, and light buttery toffee.",

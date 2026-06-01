@@ -230,14 +230,6 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
                       >
                         <Eye size={14} />
                       </button>
-                      <button
-                        id={`showcase-buy-btn-${product.id}`}
-                        onClick={() => onAddToBag(product)}
-                        className="px-5 py-3 bg-warm-gold hover:bg-cream-latte text-espresso rounded-full font-sans text-[10px] font-bold tracking-widest uppercase transition-all duration-500 cursor-pointer shadow-[0_4px_16px_rgba(200,169,126,0.25)] hover:shadow-[0_0_20px_rgba(231,216,201,0.45)] hover:-translate-y-0.5 flex items-center gap-1.5"
-                      >
-                        <ShoppingBag size={12} className="stroke-[2.5]" />
-                        Add To Bag
-                      </button>
                     </div>
                   </div>
                 </div>
