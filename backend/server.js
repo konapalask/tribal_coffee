@@ -281,8 +281,8 @@ const initializeJSONDatabase = () => {
     writeJSONFile(USERS_FILE_PATH, [
       {
         id: 'adm-1',
-        name: 'Sharmila K',
-        email: 'admin@tribalcoffee.in',
+        name: 'tribalcoffee',
+        email: 'admin@tribalcoffee.com',
         password: 'password123',
         role: 'Super Admin'
       }
@@ -359,8 +359,13 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     const assignedRole = role || 'Connoisseur';
+    let prefix = 'user';
+    if (assignedRole === 'Super Admin') prefix = 'adm';
+    else if (assignedRole === 'Dispatcher') prefix = 'dsp';
+    else if (assignedRole === 'Lounge Manager') prefix = 'mgr';
+
     const newUser = {
-      id: `user-${Date.now()}`,
+      id: `${prefix}-${Date.now()}`,
       name,
       email: emailLower,
       password, // In a robust app, we would hash this, but keeping it simplified/matching original logic
@@ -558,7 +563,7 @@ app.delete('/api/auth/users/:id', (req, res) => {
     }
 
     const user = users[userIndex];
-    if (user.email.toLowerCase() === 'admin@tribalcoffee.in') {
+    if (user.email.toLowerCase() === 'admin@tribalcoffee.com') {
       return res.status(403).json({ success: false, message: 'Cannot revoke core Super Admin privileges.' });
     }
 
@@ -581,7 +586,7 @@ app.put('/api/auth/users/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found in archives.' });
     }
-    if (user.email.toLowerCase() === 'admin@tribalcoffee.in' && status && status !== 'Active') {
+    if (user.email.toLowerCase() === 'admin@tribalcoffee.com' && status && status !== 'Active') {
       return res.status(403).json({ success: false, message: 'Cannot demote core Super Admin.' });
     }
 
@@ -611,9 +616,9 @@ app.get('/api/auth/users', (req, res) => {
   }
 });
 
-// 1f. Update user profile name and address
+// 1f. Update user profile name, address, and password
 app.put('/api/auth/users/update', (req, res) => {
-  const { email, name, address } = req.body;
+  const { email, name, address, password } = req.body;
   if (!email) {
     return res.status(400).json({ success: false, message: 'Email is required.' });
   }
@@ -629,6 +634,7 @@ app.put('/api/auth/users/update', (req, res) => {
 
     if (name) user.name = name;
     if (address !== undefined) user.address = address;
+    if (password) user.password = password;
     
     writeJSONFile(USERS_FILE_PATH, users);
 
@@ -661,6 +667,8 @@ app.post('/api/bookings', (req, res) => {
       date: new Date().toLocaleDateString('en-IN'),
       email: booking.email.toLowerCase().trim(),
       customerName: booking.customerName || 'Connoisseur',
+      phone: booking.phone,
+      fullAddress: booking.fullAddress,
       city: booking.city,
       pincode: booking.pincode,
       items: booking.items,
@@ -714,6 +722,75 @@ app.put('/api/bookings/:id/dispatch', (req, res) => {
   } catch (err) {
     console.error('Dispatch booking error:', err);
     res.status(500).json({ success: false, message: 'Failed to update dispatch status.' });
+  }
+});
+
+// 1h. Update Booking status to Declined
+app.put('/api/bookings/:id/decline', (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const bookings = readJSONFile(BOOKINGS_FILE_PATH);
+    const booking = bookings.find(b => b.id === id);
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    booking.status = 'Declined';
+    
+    writeJSONFile(BOOKINGS_FILE_PATH, bookings);
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    console.error('Decline booking error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update status to declined.' });
+  }
+});
+
+// 1i. Update Booking status to Accepted
+app.put('/api/bookings/:id/accept', (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const bookings = readJSONFile(BOOKINGS_FILE_PATH);
+    const booking = bookings.find(b => b.id === id);
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    booking.status = 'Ready to Ship';
+    
+    writeJSONFile(BOOKINGS_FILE_PATH, bookings);
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    console.error('Accept booking error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update status to accepted.' });
+  }
+});
+
+// 1j. Update Booking status to Out for Delivery
+app.put('/api/bookings/:id/out-for-delivery', (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const bookings = readJSONFile(BOOKINGS_FILE_PATH);
+    const booking = bookings.find(b => b.id === id);
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+
+    booking.status = 'Out for Delivery';
+    
+    writeJSONFile(BOOKINGS_FILE_PATH, bookings);
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    console.error('Out for delivery booking error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update status to out for delivery.' });
   }
 });
 

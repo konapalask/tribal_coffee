@@ -9,11 +9,12 @@ import Footer from './components/Footer';
 import CustomCursor from './components/CustomCursor';
 import CartDrawer from './components/CartDrawer';
 import ProductPage from './components/ProductPage';
+import { InvoiceModal } from './components/InvoiceModal';
 import { TRIBAL_PRODUCTS, type RealProduct, API_BASE_URL } from './services/db';
 import type { CartItem } from './components/CartDrawer';
-import { CheckCircle2, ShieldCheck, X, TrendingUp, Send, Mail, Lock, User, AlertCircle, Heart, Package, Edit3, LogOut, Phone, MapPin } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, X, TrendingUp, Send, Mail, Lock, User, AlertCircle, Heart, Package, Edit3, LogOut, Phone, MapPin, Clock, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import AdminDashboard from './components/AdminDashboard';
+import { AdminDashboard } from './components/AdminDashboard';
 
 export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -26,11 +27,22 @@ export default function App() {
   const [activeTrackingOrder, setActiveTrackingOrder] = useState<any>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   
   const [loggedInUser, setLoggedInUser] = useState<any>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('tribal_coffee_user');
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.email && parsed.email.includes('@') && !parsed.role) {
+             return null;
+          }
+          return parsed;
+        } catch (e) {
+          return null;
+        }
+      }
     }
     return null;
   });
@@ -45,10 +57,8 @@ export default function App() {
     }
   }, [loggedInUser]);
 
-  // Real-time Connoisseur Wishlist State
   const [wishlist, setWishlist] = useState<string[]>([]);
 
-  // Effect to load the wishlist whenever the loggedInUser changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storageKey = loggedInUser 
@@ -59,7 +69,7 @@ export default function App() {
       setWishlist(saved ? JSON.parse(saved) : []);
     }
   }, [loggedInUser]);
-  // Effect to save the wishlist whenever it or the loggedInUser changes
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storageKey = loggedInUser 
@@ -80,7 +90,6 @@ export default function App() {
     );
   };
 
-  // Simple client-side router
   useEffect(() => {
     const handleLocationChange = () => {
       setCurrentPath(window.location.pathname);
@@ -91,15 +100,12 @@ export default function App() {
       } else if (window.location.hash === '#/') {
         setCurrentPath('/');
       } else if (window.location.hash !== '#products') {
-        // If the hash changes to something other than #products (e.g., user hits back button),
-        // we should ensure the product detail page is closed.
         setActiveDetailProduct(null);
       }
     };
     window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('hashchange', handleHashChange);
 
-    // Initial load hash check
     if (window.location.hash === '#/admin') {
       setCurrentPath('/admin');
     }
@@ -110,18 +116,14 @@ export default function App() {
     };
   }, []);
 
-  // Handle scroll to top on reload
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
-  // Safely seed default items once products are fetched from the backend API
   useEffect(() => {
-    // Starting with clean empty cart state for production readiness
     setCartItems([]);
   }, [dbVersion]);
 
-  // Listen to product database changes to trigger seamless react re-renders
   useEffect(() => {
     const handleDbChange = () => {
       setDbVersion(prev => prev + 1);
@@ -130,9 +132,8 @@ export default function App() {
     return () => window.removeEventListener('tribal-db-changed', handleDbChange);
   }, []);
 
-  // Guarantee administrative accounts are restricted to the admin panel
   useEffect(() => {
-    if (loggedInUser?.email?.toLowerCase() === 'admin@tribalcoffee.in') {
+    if (loggedInUser && (loggedInUser.role === 'Super Admin' || loggedInUser.role === 'Lounge Manager' || loggedInUser.role === 'Dispatcher' || loggedInUser.email?.toLowerCase() === 'admin@tribalcoffee.com')) {
       if (currentPath !== '/admin') {
         window.history.pushState({}, '', '/admin');
         setCurrentPath('/admin');
@@ -152,7 +153,6 @@ export default function App() {
       }
       return [...prev, { product, quantity: 1, weight }];
     });
-    // Open drawer automatically for high-end e-commerce flow
     setIsCartOpen(true);
   };
 
@@ -181,7 +181,7 @@ export default function App() {
       return;
     }
 
-    if (loggedInUser.email.toLowerCase() === 'admin@tribalcoffee.in') {
+    if (loggedInUser && (loggedInUser.role === 'Super Admin' || loggedInUser.role === 'Lounge Manager' || loggedInUser.role === 'Dispatcher' || loggedInUser.email?.toLowerCase() === 'admin@tribalcoffee.com')) {
       alert('Administrative accounts are strictly prohibited from placing gourmet lounge bookings.');
       setIsCartOpen(false);
       return;
@@ -195,7 +195,6 @@ export default function App() {
     }
 
     const parsedAddr = parseAddress(loggedInUser.address);
-    // Save user booking/order history in backend persistent file
     try {
       await fetch(`${API_BASE_URL}/api/bookings`, {
         method: 'POST',
@@ -203,6 +202,8 @@ export default function App() {
         body: JSON.stringify({
           email: loggedInUser.email,
           customerName: loggedInUser.name,
+          phone: loggedInUser.phone || 'N/A',
+          fullAddress: loggedInUser.address,
           city: parsedAddr.city || 'Visakhapatnam',
           pincode: parsedAddr.pinCode || '530003',
           items: cartItems.map(item => ({
@@ -231,11 +232,17 @@ export default function App() {
 
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
-  // If path is /admin, render the admin dashboard as a full, dedicated page
   if (currentPath === '/admin') {
     return (
       <div className="relative min-h-screen w-full bg-espresso text-cream-latte grain-overlay">
         <CustomCursor isAdminActive={true} />
+        {selectedInvoice && (
+          <InvoiceModal 
+            order={selectedInvoice} 
+            onClose={() => setSelectedInvoice(null)} 
+            customerInfo={loggedInUser}
+          />
+        )}
         <AdminDashboard
           onClose={() => {
             window.history.pushState({}, '', '/');
@@ -243,6 +250,7 @@ export default function App() {
           }}
           loggedInUser={loggedInUser}
           setLoggedInUser={setLoggedInUser}
+          onViewInvoice={(o) => setSelectedInvoice(o)}
         />
       </div>
     );
@@ -250,10 +258,7 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen w-full bg-espresso text-cream-latte grain-overlay">
-      {/* 3D Glow Cursor Follower */}
       <CustomCursor isAdminActive={false} />
-
-      {/* Branded Top Navbar */}
       <Navbar
         onCartToggle={() => setIsCartOpen(!isCartOpen)}
         cartCount={cartCount}
@@ -266,8 +271,6 @@ export default function App() {
           }
         }}
       />
-
-      {/* Cinematic Hero & Dynamic Carousel */}
       <Hero
         key={`hero-${dbVersion}`}
         onAddToBag={handleAddToBag}
@@ -373,319 +376,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 7. CUSTOMER LIVE DELIVERY PARCEL TRACKING OVERLAY */}
-      <AnimatePresence>
-        {showCustomerTracker && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[120] flex items-center justify-center p-4 md:p-6 bg-black/90 backdrop-blur-xl text-cream-latte font-sans"
-          >
-            <motion.div
-              initial={{ scale: 0.95, y: 40 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 40 }}
-              transition={{ type: 'spring', damping: 22 }}
-              className="w-full max-w-4xl glassmorphism rounded-[40px] border border-warm-gold/25 overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.9)] flex flex-col md:flex-row relative"
-            >
-              {/* Close Button */}
-              <button
-                onClick={() => {
-                  setShowCustomerTracker(false);
-                  setCheckoutStatus('idle');
-                  setCartItems([]);
-                }}
-                className="absolute top-6 right-6 z-30 p-2.5 rounded-full bg-black/60 hover:bg-cream-latte/15 border border-cream-latte/10 hover:border-warm-gold/30 text-cream-latte/70 hover:text-warm-gold transition-all cursor-pointer"
-                title="Close Tracker"
-              >
-                <X size={16} />
-              </button>
-
-              {/* LEFT SIDE: LIVE SIMULATED GPS INTERACTIVE ROUTE MAP */}
-              <div className="w-full md:w-[55%] h-64 md:h-[520px] bg-[#120D0A] relative overflow-hidden border-b md:border-b-0 md:border-r border-warm-gold/15 flex flex-col justify-between">
-                
-                {/* Tech grid texture overlay */}
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(214,178,122,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(214,178,122,0.02)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-                <div className="absolute inset-0 bg-radial-gradient(circle_at_center,rgba(0,0,0,0)_20%,rgba(18,13,10,0.85)_100%) pointer-events-none" />
-
-                {/* Map Header */}
-                <div className="p-6 relative z-10 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${activeTrackingOrder?.status === 'Dispatched' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-                    <span className={`text-[9px] font-sans tracking-[0.25em] font-bold uppercase ${activeTrackingOrder?.status === 'Dispatched' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {activeTrackingOrder?.status === 'Dispatched' ? 'Live Telemetry Sourced' : 'Awaiting Dispatch Vault'}
-                    </span>
-                  </div>
-                  <span className="bg-[#1C1612] border border-warm-gold/20 text-warm-gold font-sans text-[8px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                    DELHIVERY EXPRESS
-                  </span>
-                </div>
-
-                {/* Simulated GPS SVG Map Routing */}
-                {activeTrackingOrder?.status === 'Dispatched' ? (
-                  <div className="absolute inset-0 flex items-center justify-center p-8">
-                    <svg className="w-full h-full max-h-[300px]" viewBox="0 0 400 240" fill="none">
-                      <path d="M -50,60 Q 100,20 200,90 T 450,40" stroke="rgba(214,178,122,0.03)" strokeWidth="1" />
-                      <path d="M -50,140 Q 120,80 240,160 T 450,110" stroke="rgba(214,178,122,0.03)" strokeWidth="1" />
-
-                      <path
-                        id="liveRoute"
-                        d="M 60,160 C 140,130 200,70 320,80"
-                        stroke="rgba(214,178,122,0.15)"
-                        strokeWidth="2.5"
-                        strokeDasharray="4,4"
-                      />
-
-                    <path
-                      d="M 60,160 C 140,130 200,70 320,80"
-                      stroke="url(#customerMapGrad)"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      strokeDasharray="250"
-                      strokeDashoffset="120"
-                      className="animate-dash"
-                      style={{
-                        strokeDasharray: '300',
-                        animation: 'dash 6s linear infinite'
-                      }}
-                    />
-
-                    <defs>
-                      <linearGradient id="customerMapGrad" x1="0" y1="1" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#4A2B1D" />
-                        <stop offset="60%" stopColor="#D6B27A" />
-                        <stop offset="100%" stopColor="#10B981" />
-                      </linearGradient>
-                    </defs>
-
-                    <g transform="translate(60, 160)">
-                      <circle r="14" fill="rgba(74,43,29,0.25)" className="animate-pulse" />
-                      <circle r="7" fill="#4A2B1D" stroke="#D6B27A" strokeWidth="1.5" />
-                      <text y="-18" className="text-[8px] font-sans font-black tracking-widest text-cream-latte/50 uppercase text-center" textAnchor="middle">
-                        ARAKU CO-OP
-                      </text>
-                    </g>
-
-                    <g transform="translate(320, 80)">
-                      <circle r="16" fill="rgba(214,178,122,0.15)" className="animate-pulse-slow" />
-                      <circle r="8" fill="#D6B27A" stroke="#120D0A" strokeWidth="2" />
-                      <circle r="12" fill="none" stroke="#D6B27A" strokeWidth="1" className="animate-ping" style={{ animationDuration: '3s' }} />
-                      <text y="-18" className="text-[8px] font-sans font-black tracking-widest text-warm-gold uppercase text-center animate-bounce" textAnchor="middle">
-                        YOUR LOUNGE
-                      </text>
-                    </g>
-
-                    <g className="animate-ride">
-                      <circle r="9" fill="rgba(16,185,129,0.3)" />
-                      <circle r="4.5" fill="#10B981" stroke="#FFFFFF" strokeWidth="1.5" className="animate-pulse" />
-                    </g>
-                  </svg>
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-black/40">
-                    <div className="w-32 h-32 mb-6 rounded-2xl overflow-hidden border border-warm-gold/20 shadow-[0_10px_30px_rgba(0,0,0,0.8)] relative">
-                      <div className="absolute inset-0 bg-warm-gold/10 mix-blend-overlay z-10"></div>
-                      <img loading="lazy" src={`${API_BASE_URL}/images/dispatch_vault.opt.webp`} alt="Dispatch Vault" className="w-full h-full object-cover filter contrast-125 sepia-[.2]" />
-                    </div>
-                    <h5 className="font-playfair text-xl text-cream-latte mb-1 animate-pulse">Pre-Dispatch Stage</h5>
-                    <p className="text-[10px] text-cream-latte/50 max-w-[220px] leading-relaxed">
-                      Your order is currently being prepared at our Araku Co-Op Vaults. Live telemetry will activate upon courier allocation.
-                    </p>
-                  </div>
-                )}
-
-                <div className="p-6 bg-black/40 border-t border-warm-gold/10 relative z-10 flex justify-between items-center text-left">
-                  <div>
-                    <span className="text-[8px] font-sans text-cream-latte/45 tracking-widest uppercase font-bold block">Current Coordinates</span>
-                    <span className="text-[10px] font-mono text-cream-latte/75 font-semibold block mt-0.5">
-                      {activeTrackingOrder?.status === 'Dispatched' ? '18.0461° N, 79.0125° E (En Route)' : '18.3273° N, 82.8775° E (Araku)'}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[8px] font-sans text-cream-latte/45 tracking-widest uppercase font-bold block">Delhivery speed</span>
-                    <span className={`text-sm font-bebas tracking-wider font-bold block mt-0.5 ${activeTrackingOrder?.status === 'Dispatched' ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`}>
-                      {activeTrackingOrder?.status === 'Dispatched' ? '42 KM/H' : 'PENDING'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* RIGHT SIDE: LOGISTICS DETAILS AND REAL-TIME MILESTONES */}
-              <div className="w-full md:w-[45%] p-6 md:p-8 flex flex-col justify-between text-left">
-                
-                <div>
-                  <span className="text-[8px] font-sans tracking-[0.3em] text-warm-gold font-bold uppercase mb-2 block">
-                    Delhivery Express Partner
-                  </span>
-                  <div className="flex items-center justify-between p-4 bg-espresso/50 border border-warm-gold/15 rounded-2xl mb-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-16 h-16 rounded-full filter blur-[25px] bg-warm-gold/5 -z-10" />
-                    
-                    {activeTrackingOrder?.status === 'Dispatched' ? (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-full bg-warm-gold text-espresso flex items-center justify-center font-playfair font-black text-base shadow-[0_0_12px_rgba(214,178,122,0.35)] shrink-0">
-                            VK
-                          </div>
-                          <div>
-                            <h4 className="font-playfair font-bold text-sm text-cream-latte">Vijay Kumar</h4>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[10px] font-semibold text-emerald-400">4.9 ★</span>
-                              <span className="text-cream-latte/20">|</span>
-                              <span className="text-[9px] font-sans text-cream-latte/50 uppercase tracking-widest">Priority Cargo</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <a
-                          href="tel:+919848022338"
-                          className="p-3 bg-warm-gold hover:bg-cream-latte text-espresso rounded-xl transition-all cursor-pointer shadow-md"
-                          title="Contact Dispatcher Rider"
-                        >
-                          <Send size={14} className="stroke-[2.5] rotate-45 translate-x-[2px] -translate-y-[1px]" />
-                        </a>
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-3 w-full">
-                        <div className="w-11 h-11 rounded-full bg-black/40 border border-warm-gold/10 text-cream-latte/30 flex items-center justify-center shrink-0">
-                          <User size={16} />
-                        </div>
-                        <div>
-                          <h4 className="font-playfair font-bold text-sm text-cream-latte/70">Awaiting Allocation</h4>
-                          <p className="text-[9px] font-sans text-cream-latte/40 uppercase tracking-widest mt-1">Rider Details Pending</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-
-                  <div className="grid grid-cols-2 gap-4 bg-espresso/25 border border-warm-gold/10 p-4 rounded-2xl mb-6 text-xs">
-                    <div>
-                      <span className="text-[8px] font-sans text-cream-latte/45 tracking-widest uppercase block font-bold">Consignment ID</span>
-                      <span className="font-semibold text-cream-latte mt-1 block">{activeTrackingOrder?.id || 'TRB-8729'}</span>
-                    </div>
-                    <div>
-                      <span className="text-[8px] font-sans text-cream-latte/45 tracking-widest uppercase block font-bold">AWB Reference</span>
-                      <span className="font-semibold text-warm-gold mt-1 block tracking-wider font-mono uppercase">{activeTrackingOrder?.awb || 'Awaiting Allocation'}</span>
-                    </div>
-                  </div>
-
-                  <h5 className="text-[9px] font-sans tracking-[0.25em] text-warm-gold font-bold uppercase mb-4">
-                    Your Logistical Progress
-                  </h5>
-                  {/* Render dynamic logistical progress milestones based on dispatch status */}
-                  {(() => {
-                    const isDispatched = activeTrackingOrder?.status === 'Dispatched';
-
-                    return (
-                      <div className="relative pl-6 space-y-5">
-                        <div className="absolute left-[7px] top-[8px] bottom-[8px] w-[1px] bg-warm-gold/20" />
-                        <div className={`absolute left-[7px] top-[8px] w-[1.5px] bg-emerald-500 transition-all duration-700 ${
-                          isDispatched ? 'h-[105px]' : 'h-[20px]'
-                        }`} />
-
-                        {/* Milestone 1: Order Placed */}
-                        <div className="relative">
-                          <div className="absolute -left-[23px] top-[1.5px] w-4 h-4 rounded-full bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                            <CheckCircle2 size={10} className="stroke-[2.5]" />
-                          </div>
-                          <div className="text-xs">
-                            <h6 className="font-bold text-cream-latte flex items-center gap-2">
-                              Order Placed
-                              <span className="text-[8px] bg-emerald-950 border border-emerald-500/20 text-emerald-400 font-sans px-1.5 py-0.5 rounded font-bold">DONE</span>
-                            </h6>
-                            <p className="text-[10px] text-cream-latte/50 mt-0.5">Your luxury coffee order has been securely placed.</p>
-                          </div>
-                        </div>
-
-                        {/* Milestone 2: Order Dispatched */}
-                        <div className={`relative transition-opacity duration-500 ${isDispatched ? '' : 'opacity-40'}`}>
-                          {isDispatched ? (
-                            <div className="absolute -left-[23px] top-[1.5px] w-4 h-4 rounded-full bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                              <CheckCircle2 size={10} className="stroke-[2.5]" />
-                            </div>
-                          ) : (
-                            <div className="absolute -left-[23px] top-[1.5px] w-4 h-4 rounded-full bg-[#1A130E] border border-cream-latte/15 flex items-center justify-center text-cream-latte/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-cream-latte/20" />
-                            </div>
-                          )}
-                          <div className="text-xs">
-                            <h6 className="font-bold text-cream-latte flex items-center gap-2">
-                              Order Dispatched
-                              <span className={`text-[8px] font-sans px-1.5 py-0.5 rounded font-bold border ${
-                                isDispatched 
-                                  ? 'bg-emerald-950 border-emerald-500/20 text-emerald-400' 
-                                  : 'bg-black/40 border-cream-latte/10 text-cream-latte/40'
-                              }`}>
-                                {isDispatched ? 'DONE' : 'PENDING'}
-                              </span>
-                            </h6>
-                            <p className="text-[10px] text-cream-latte/50 mt-0.5">
-                              {isDispatched 
-                                ? 'Your order has been dispatched from our administrative vault.' 
-                                : 'Awaiting admin dispatch and courier allocation.'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Milestone 3: In Transit */}
-                        <div className={`relative transition-opacity duration-500 ${isDispatched ? '' : 'opacity-40'}`}>
-                          {isDispatched ? (
-                            <div className="absolute -left-[23px] top-[1.5px] w-4 h-4 rounded-full bg-[#201610] border border-warm-gold/40 flex items-center justify-center text-warm-gold animate-pulse">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-ping" />
-                            </div>
-                          ) : (
-                            <div className="absolute -left-[23px] top-[1.5px] w-4 h-4 rounded-full bg-[#1A130E] border border-cream-latte/15 flex items-center justify-center text-cream-latte/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-cream-latte/20" />
-                            </div>
-                          )}
-                          <div className="text-xs">
-                            <h6 className={`font-bold flex items-center gap-2 ${isDispatched ? 'text-warm-gold' : 'text-cream-latte'}`}>
-                              In Transit - On the Way
-                              {isDispatched && (
-                                <span className="text-[8px] bg-[#2C1F15] border border-warm-gold/20 text-warm-gold font-sans px-1.5 py-0.5 rounded font-bold animate-pulse">ACTIVE</span>
-                              )}
-                            </h6>
-                            <p className="text-[10px] text-cream-latte/50 mt-0.5">
-                              {isDispatched 
-                                ? 'Your premium Araku wood-fired crop had dispatched.'
-                                : 'En route tracking will activate upon courier collection.'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Milestone 4: Out for Delivery */}
-                        <div className="relative opacity-40">
-                          <div className="absolute -left-[23px] top-[1.5px] w-4 h-4 rounded-full bg-[#1A130E] border border-cream-latte/15 flex items-center justify-center text-cream-latte/30">
-                            <span className="w-1.5 h-1.5 rounded-full bg-cream-latte/10" />
-                          </div>
-                          <div className="text-xs">
-                            <h6 className="font-bold text-cream-latte">Out for Delivery</h6>
-                            <p className="text-[10px] text-cream-latte/50 mt-0.5">Awaiting local sorting arrival.</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="mt-8 border-t border-warm-gold/15 pt-6 flex justify-end">
-                  <button
-                    onClick={() => {
-                      setShowCustomerTracker(false);
-                      setCheckoutStatus('idle');
-                      setCartItems([]);
-                    }}
-                    className="px-8 py-3.5 bg-warm-gold text-espresso font-sans text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-cream-latte hover:text-espresso transition-all cursor-pointer shadow-[0_4px_20px_rgba(200,169,126,0.3)] w-full text-center font-bold"
-                  >
-                    Return to Lounge
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* CUSTOMER LIVE DELIVERY TRACKING (Removed custom modal, direct external links used) */}
 
       {/* USER LOGIN & REGISTRATION PORTAL */}
       <AnimatePresence>
@@ -702,7 +393,7 @@ export default function App() {
               onLoginSuccess={(user) => {
                 setLoggedInUser(user);
                 setIsAuthModalOpen(false);
-                if (user.email === 'admin@tribalcoffee.in') {
+                if (user && (user.role === 'Super Admin' || user.role === 'Lounge Manager' || user.role === 'Dispatcher' || user.email?.toLowerCase() === 'admin@tribalcoffee.com')) {
                   window.history.pushState({}, '', '/admin');
                   setCurrentPath('/admin');
                 }
@@ -763,6 +454,15 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Put Modals at the absolute bottom to ensure highest z-index rendering */}
+      {selectedInvoice && (
+        <InvoiceModal 
+          order={selectedInvoice} 
+          onClose={() => setSelectedInvoice(null)} 
+          customerInfo={loggedInUser}
+        />
+      )}
     </div>
   );
 }
@@ -778,8 +478,12 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [regDoorNo, setRegDoorNo] = useState('');
+  const [regArea, setRegArea] = useState('');
+  const [regLandmark, setRegLandmark] = useState('');
   const [regCity, setRegCity] = useState('');
-  const [regAddress, setRegAddress] = useState('');
+  const [regState, setRegState] = useState('');
+  const [regPinCode, setRegPinCode] = useState('');
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState('');
   const [error, setError] = useState('');
@@ -816,7 +520,14 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
           password: password,
           name,
           phone: phone.trim() || null,
-          address: regAddress.trim() ? { area: regAddress.trim(), city: regCity.trim() } : null,
+          address: (regDoorNo || regArea || regCity || regState || regPinCode) ? { 
+            doorNo: regDoorNo.trim(), 
+            area: regArea.trim(), 
+            landmark: regLandmark.trim(), 
+            city: regCity.trim(), 
+            state: regState.trim(), 
+            pinCode: regPinCode.trim() 
+          } : null,
           dob: dob || null,
           gender: gender || null
         })
@@ -872,7 +583,7 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
     setLoading(true);
 
     const emailLower = email.toLowerCase().trim();
-    const isAdmin = emailLower === 'admin@tribalcoffee.in';
+    const isAdminDevBackdoor = emailLower === 'admin@tribalcoffee.in';
 
     if (mode === 'login') {
       if (!email.trim() || !password.trim()) {
@@ -881,10 +592,10 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
         return;
       }
 
-      if (isAdmin && password === 'password123') {
-        setSuccess('Commander Sharmila Authenticated (Dev Mode). Synchronizing secure console.');
+      if (emailLower === 'admin@tribalcoffee.com' && password === 'password123') {
+        setSuccess('Commander tribalcoffee Authenticated (Dev Mode). Synchronizing secure console.');
         setTimeout(() => {
-          onLoginSuccess({ name: 'Sharmila K', email: emailLower, role: 'Super Admin' });
+          onLoginSuccess({ name: 'tribalcoffee', email: emailLower, role: 'Super Admin' });
         }, 1200);
         setLoading(false);
         return;
@@ -1210,36 +921,89 @@ function AuthPortal({ onClose, onLoginSuccess }: AuthPortalProps) {
         )}
 
         {mode === 'register' && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
-                City
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-cream-latte/30">
-                  <MapPin size={14} />
-                </span>
+          <div className="space-y-4 border-t border-warm-gold/15 pt-4 mt-4">
+            <h4 className="text-[10px] text-warm-gold uppercase tracking-widest font-bold">Shipping Details</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                  Door No / Flat
+                </label>
+                <input
+                  type="text"
+                  value={regDoorNo}
+                  onChange={(e) => setRegDoorNo(e.target.value)}
+                  placeholder="e.g. Flat 4B"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                  Area / Street
+                </label>
+                <input
+                  type="text"
+                  value={regArea}
+                  onChange={(e) => setRegArea(e.target.value)}
+                  placeholder="e.g. Currency Nagar"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                  Landmark (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={regLandmark}
+                  onChange={(e) => setRegLandmark(e.target.value)}
+                  placeholder="e.g. Near Museum"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                  City
+                </label>
                 <input
                   type="text"
                   value={regCity}
                   onChange={(e) => setRegCity(e.target.value)}
-                  placeholder="Your city"
-                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl pl-10 pr-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                  placeholder="e.g. Vijayawada"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
                 />
               </div>
             </div>
-            <div>
-              <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
-                Area / Street
-              </label>
-              <input
-                type="text"
-                value={regAddress}
-                onChange={(e) => setRegAddress(e.target.value)}
-                placeholder="Street / area"
-                className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
-              />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                  State
+                </label>
+                <input
+                  type="text"
+                  value={regState}
+                  onChange={(e) => setRegState(e.target.value)}
+                  placeholder="e.g. Andhra Pradesh"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-cream-latte/55 uppercase tracking-wider mb-1.5 block font-bold">
+                  Pin / Zip Code
+                </label>
+                <input
+                  type="text"
+                  value={regPinCode}
+                  onChange={(e) => setRegPinCode(e.target.value)}
+                  placeholder="e.g. 530003"
+                  className="w-full bg-[#1A110B]/70 border border-warm-gold/15 rounded-xl px-4 py-2.5 text-xs text-cream-latte focus:outline-none focus:border-warm-gold/50 transition-colors placeholder-cream-latte/20 font-medium"
+                />
+              </div>
             </div>
+            <div className="border-b border-warm-gold/15 pb-2"></div>
           </div>
         )}
 
@@ -1461,8 +1225,11 @@ function ConnoisseurLounge({ user, onUpdateUser, onSignOut, wishlist, toggleWish
         const res = await fetch(`${API_BASE_URL}/api/bookings`);
         if (res.ok) {
           const data = await res.json();
-          // Filter by active connoisseur's email address
-          const filtered = data.filter((o: any) => o.email.toLowerCase() === user.email.toLowerCase());
+          // Filter by active connoisseur's email address and hide Pending orders
+          const filtered = data.filter((o: any) => 
+            o.email.toLowerCase() === user.email.toLowerCase() && 
+            o.status !== 'Pending'
+          ).reverse(); // Reverse to show newest data at the top
           setOrders(filtered);
         }
       } catch (err) {
@@ -1889,7 +1656,9 @@ function ConnoisseurLounge({ user, onUpdateUser, onSignOut, wishlist, toggleWish
                               <div>
                                 <div className="flex items-center gap-2 mb-1.5">
                                   <span className="font-bebas text-sm text-warm-gold tracking-widest uppercase">{o.id}</span>
-                                  <span className="text-[9px] bg-amber-950/40 border border-amber-500/20 text-amber-300 font-sans px-1.5 py-0.5 rounded font-black tracking-wider uppercase">{o.status || 'In Transit'}</span>
+                                  <span className="text-[9px] bg-amber-950/40 border border-amber-500/20 text-amber-300 font-sans px-1.5 py-0.5 rounded font-black tracking-wider uppercase">
+                                    {o.status === 'Pending' ? 'Awaiting Admin Approval' : o.status === 'Ready to Ship' ? 'Order is ready to dispatch' : o.status === 'Dispatched' ? 'Order Dispatched' : (o.status || 'In Transit')}
+                                  </span>
                                 </div>
                                 <p className="text-[10px] text-cream-latte/50 font-sans">Placed: {o.date || 'Today'}</p>
                                 
@@ -1908,13 +1677,53 @@ function ConnoisseurLounge({ user, onUpdateUser, onSignOut, wishlist, toggleWish
                                   <span className="text-[8px] text-cream-latte/45 uppercase tracking-widest block mb-0.5">Total Amount</span>
                                   <span className="font-bebas text-lg text-warm-gold tracking-widest font-black block">₹{o.amount ? o.amount.toFixed(2) : '0.00'}</span>
                                 </div>
-                                <button
-                                  onClick={() => onTrackDelivery(o)}
-                                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md flex items-center gap-1"
-                                >
-                                  <TrendingUp size={10} />
-                                  Track Delivery
-                                </button>
+                                {o.status === 'Declined' ? (
+                                  <div className="px-3 py-1.5 bg-red-950/40 border border-red-500/30 text-red-400 font-sans text-[9px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1">
+                                    <AlertCircle size={10} />
+                                    Delivery Not Possible
+                                  </div>
+                                ) : (o.status === 'Dispatched') ? (
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => {
+                                        if (o.awb) {
+                                          window.open(`https://www.delhivery.com/track/package/${o.awb}`, '_blank');
+                                        } else {
+                                          alert('Tracking link is not yet available from the delivery partner.');
+                                        }
+                                      }}
+                                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md flex items-center gap-1"
+                                    >
+                                      <TrendingUp size={10} />
+                                      Track Delivery
+                                    </button>
+                                    <button
+                                      onClick={() => setSelectedInvoice(o)}
+                                      className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#F4E2B8] text-[#050505] font-sans text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md flex items-center gap-1"
+                                    >
+                                      <FileText size={10} />
+                                      Get Invoice
+                                    </button>
+                                  </div>
+                                ) : (o.status === 'Out for Delivery') ? (
+                                  <button
+                                    onClick={() => setSelectedInvoice(o)}
+                                    className="px-3.5 py-2 bg-[#D4AF37] hover:bg-[#F4E2B8] text-[#050505] font-sans text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md flex items-center gap-1"
+                                  >
+                                    <FileText size={10} />
+                                    Get Invoice
+                                  </button>
+                                ) : o.status === 'Ready to Ship' ? (
+                                  <div className="px-3 py-1.5 bg-warm-gold/10 border border-warm-gold/20 text-warm-gold/70 font-sans text-[9px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1">
+                                    <Clock size={10} />
+                                    Awaiting Dispatcher
+                                  </div>
+                                ) : (
+                                  <div className="px-3 py-1.5 bg-warm-gold/10 border border-warm-gold/20 text-warm-gold/70 font-sans text-[9px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1">
+                                    <Clock size={10} />
+                                    Awaiting Processing
+                                  </div>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -1950,9 +1759,18 @@ function ConnoisseurLounge({ user, onUpdateUser, onSignOut, wishlist, toggleWish
                                 </div>
                               </div>
 
-                              <div className="text-left sm:text-right shrink-0">
-                                <span className="text-[8px] text-cream-latte/40 uppercase tracking-widest block mb-0.5">Total Paid</span>
-                                <span className="font-bebas text-lg text-cream-latte/70 tracking-widest font-black block">₹{o.amount ? o.amount.toFixed(2) : '0.00'}</span>
+                              <div className="text-left sm:text-right shrink-0 flex flex-col items-start sm:items-end gap-3.5 border-t sm:border-t-0 border-warm-gold/5 pt-3 sm:pt-0">
+                                <div>
+                                  <span className="text-[8px] text-cream-latte/40 uppercase tracking-widest block mb-0.5">Total Paid</span>
+                                  <span className="font-bebas text-lg text-cream-latte/70 tracking-widest font-black block">₹{o.amount ? o.amount.toFixed(2) : '0.00'}</span>
+                                </div>
+                                <button
+                                  onClick={() => setSelectedInvoice(o)}
+                                  className="px-3 py-1.5 bg-[#D4AF37]/80 hover:bg-[#D4AF37] text-[#050505] font-sans text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                >
+                                  <FileText size={10} />
+                                  Get Invoice
+                                </button>
                               </div>
                             </div>
                           ))}
@@ -2375,19 +2193,12 @@ function OrderPlacedSuccessAnimation({ onTrackLive, onExitLounge }: OrderPlacedS
               </span>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center w-full max-w-sm mx-auto">
-              <button
-                onClick={onTrackLive}
-                className="w-full sm:w-1/2 bg-emerald-600 text-white border border-emerald-500 hover:bg-emerald-500 font-sans text-[10px] font-bold tracking-[0.15em] uppercase py-3.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(16,185,129,0.2)] hover:shadow-none font-bold"
-              >
-                <TrendingUp size={12} />
-                Track Live
-              </button>
+            <div className="flex justify-center items-center w-full max-w-xs mx-auto">
               <button
                 onClick={onExitLounge}
-                className="w-full sm:w-1/2 bg-warm-gold text-espresso border border-warm-gold hover:bg-transparent hover:text-warm-gold font-sans text-[10px] font-bold tracking-[0.15em] uppercase py-3.5 rounded-xl transition-all duration-300 cursor-pointer shadow-[0_4px_16px_rgba(200,169,126,0.2)] hover:shadow-none font-bold"
+                className="w-full bg-warm-gold text-espresso border border-warm-gold hover:bg-transparent hover:text-warm-gold font-sans text-[10px] font-bold tracking-[0.15em] uppercase py-3.5 rounded-xl transition-all duration-300 cursor-pointer shadow-[0_4px_16px_rgba(200,169,126,0.2)] hover:shadow-none font-bold"
               >
-                Exit Lounge
+                Return to Lounge
               </button>
             </div>
           </motion.div>

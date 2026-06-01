@@ -1,8 +1,8 @@
 [
   {
     "id": "adm-1",
-    "name": "Sharmila K",
-    "email": "admin@tribalcoffee.in",
+    "name": "tribalcoffee",
+    "email": "admin@tribalcoffee.com",
     "password": "password123",
     "role": "Super Admin",
     "status": "Active",
@@ -3243,5 +3243,34 @@
     "shippingAddress": "No shipping address recorded",
     "status": "Unverified Registration",
     "dateAdded": "01/01/2026"
+  },
+  {
+    "id": "user-1780303984551",
+    "name": "samuel nikhil",
+    "email": "nikhilmaddali147@gmail.com",
+    "password": "123456",
+    "role": "Connoisseur",
+    "phone": "9121266269",
+    "address": {
+      "doorNo": "5-147",
+      "area": "currency nagar",
+      "landmark": "",
+      "city": "vijayawada",
+      "state": "Andra pradesh",
+      "pinCode": "520008"
+    },
+    "dob": "2003-01-24",
+    "gender": "Male",
+    "emailVerified": true
+  },
+  {
+    "id": "dsp-1780309134636",
+    "name": "shiprocket",
+    "email": "shiprocket@tribalcoffee.in",
+    "password": "123456",
+    "role": "Dispatcher",
+    "phone": null,
+    "address": null,
+    "emailVerified": false
   }
 ]

@@ -21,10 +21,12 @@ interface ShipmentOrder {
   pincode: string;
   productName: string;
   amount: number;
-  status: 'Pending' | 'Ready to Ship' | 'Dispatched' | 'Delivered';
+  status: string;
   awb?: string;
   courier?: string;
   date?: string;
+  phone?: string;
+  fullAddress?: any;
 }
 
 interface ChatMessage {
@@ -50,16 +52,36 @@ interface AdminUser {
   email: string;
   role: 'Super Admin' | 'Lounge Manager' | 'Dispatcher';
   status: 'Active' | 'Pending';
-}export default function AdminDashboard({ onClose, loggedInUser, setLoggedInUser }: { onClose: () => void; loggedInUser?: any; setLoggedInUser?: (user: any) => void }) {
+}
+
+interface AdminDashboardProps {
+  onClose: () => void;
+  loggedInUser: any;
+  setLoggedInUser: (user: any) => void;
+  onViewInvoice: (order: any) => void;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose, loggedInUser, setLoggedInUser, onViewInvoice }) => {
   // Security Portal states
-  const [isAuthenticated, setIsAuthenticated] = useState(loggedInUser?.email === 'admin@tribalcoffee.in');
+  const [isAuthenticated, setIsAuthenticated] = useState(loggedInUser && (loggedInUser.role === 'Super Admin' || loggedInUser.role === 'Lounge Manager' || loggedInUser.role === 'Dispatcher' || loggedInUser.email?.toLowerCase() === 'admin@tribalcoffee.com'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
-  const [adminName, setAdminName] = useState(loggedInUser?.name || 'Sharmila K');
+  const [adminName, setAdminName] = useState(loggedInUser?.name || 'tribalcoffee');
   // General navigation
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'customers' | 'shiprocket' | 'deliveryPartners' | 'chat' | 'admins' | 'audit'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'customers' | 'shiprocket' | 'deliveryPartners' | 'chat' | 'admins' | 'audit'>(loggedInUser?.role === 'Dispatcher' ? 'shiprocket' : 'analytics');
+
+  useEffect(() => {
+    if (loggedInUser) {
+      if (loggedInUser.role === 'Dispatcher') {
+        setActiveTab('shiprocket');
+      }
+      if (loggedInUser.name) {
+        setAdminName(loggedInUser.name);
+      }
+    }
+  }, [loggedInUser]);
 
   // Sidebar collapsible state with localStorage persistence
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => localStorage.getItem('admin_sidebar_collapsed') === 'true');
@@ -128,7 +150,7 @@ interface AdminUser {
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterMonth, setFilterMonth] = useState('all');
-  const [orderSubTab, setOrderSubTab] = useState<'new_requests' | 'history'>('new_requests');
+  const [orderSubTab, setOrderSubTab] = useState<'new_requests' | 'pending_delivery' | 'out_for_delivery' | 'history'>('new_requests');
   const [selectedTrackingShipment, setSelectedTrackingShipment] = useState<ShipmentOrder | null>(null);
 
   const parseBookingDate = (dateStr?: string) => {
@@ -151,6 +173,9 @@ interface AdminUser {
   };
 
   const filteredShipments = shipments.filter(s => {
+    if (loggedInUser?.role === 'Dispatcher' && (s.status === 'Pending' || s.status === 'Declined')) {
+      return false;
+    }
     // 1. Month Filter (YYYY-MM)
     if (filterMonth !== 'all' && s.date) {
       const dateObj = parseBookingDate(s.date);
@@ -212,6 +237,7 @@ interface AdminUser {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
   const [inviteRole, setInviteRole] = useState<'Super Admin' | 'Lounge Manager' | 'Dispatcher'>('Lounge Manager');
 
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
@@ -444,8 +470,10 @@ interface AdminUser {
             status: b.status || 'Pending',
             awb: b.awb,
             courier: b.courier,
-            date: b.date
-          }));
+            date: b.date,
+            phone: b.phone,
+            fullAddress: b.fullAddress
+          })).reverse(); // Reverse to show newest data at the top
           setShipments(mapped);
         }
       } catch (err) {
@@ -492,7 +520,7 @@ interface AdminUser {
       if (res.ok && data.success) {
         setIsAuthenticated(true);
         if (setLoggedInUser) {
-          setLoggedInUser({ name: data.user?.name || 'Sharmila K', email: email });
+          setLoggedInUser(data.user);
         }
       } else {
         setAuthError(data.message || 'Authentication rejected. Access denied.');
@@ -500,10 +528,10 @@ interface AdminUser {
     } catch (err) {
       console.error('Login error:', err);
       // Hardcoded fallback for offline/development mode
-      if (email === 'admin@tribalcoffee.in' && password === 'password123') {
+      if (email === 'admin@tribalcoffee.com' && password === 'password123') {
         setIsAuthenticated(true);
         if (setLoggedInUser) {
-          setLoggedInUser({ name: 'Sharmila K', email: email });
+          setLoggedInUser({ name: 'tribalcoffee', email: email, role: 'Super Admin' });
         }
       } else {
         setAuthError('Backend system offline. Failed to establish connection.');
@@ -648,6 +676,71 @@ interface AdminUser {
       }
     } catch (e) {
       console.error('Failed to dispatch shipment in backend:', e);
+    }
+  };
+
+  const handleOutForDeliveryShipment = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bookings/${id}/out-for-delivery`, {
+        method: 'PUT'
+      });
+      if (res.ok) {
+        setShipments(prev => prev.map(s => {
+          if (s.id === id) {
+            return {
+              ...s,
+              status: 'Out for Delivery'
+            };
+          }
+          return s;
+        }));
+      } else {
+        alert('Failed to mark out for delivery. Please ensure the backend server was restarted to pick up the new code changes.');
+      }
+    } catch (e) {
+      console.error('Failed to mark out for delivery in backend:', e);
+    }
+  };
+
+  const handleDeclineShipment = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bookings/${id}/decline`, {
+        method: 'PUT'
+      });
+      if (res.ok) {
+        setShipments(prev => prev.map(s => {
+          if (s.id === id) {
+            return {
+              ...s,
+              status: 'Declined'
+            };
+          }
+          return s;
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to decline shipment in backend:', e);
+    }
+  };
+
+  const handleAcceptShipment = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bookings/${id}/accept`, {
+        method: 'PUT'
+      });
+      if (res.ok) {
+        setShipments(prev => prev.map(s => {
+          if (s.id === id) {
+            return {
+              ...s,
+              status: 'Ready to Ship'
+            };
+          }
+          return s;
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to accept shipment in backend:', e);
     }
   };
 
@@ -847,7 +940,7 @@ interface AdminUser {
         body: JSON.stringify({
           name: inviteName,
           email: inviteEmail,
-          password: 'password123', // Default passcode for newly invited administrative accounts
+          password: invitePassword || 'password123', // Uses provided password or falls back to default
           role: inviteRole
         })
       });
@@ -872,6 +965,7 @@ interface AdminUser {
         setIsInviteModalOpen(false);
         setInviteName('');
         setInviteEmail('');
+        setInvitePassword('');
       } else {
         const errorData = await res.json();
         alert(errorData.message || 'Failed to authorize administrative profile in backend database.');
@@ -1100,7 +1194,7 @@ interface AdminUser {
             }`}
           >
             {/* Sidebar Top: Brand */}
-            <div>
+            <div className="flex flex-col flex-1 min-h-0">
               <div className={`p-6 border-b border-[#D4AF37]/15 flex items-center justify-between ${isSidebarCollapsed ? 'justify-center' : ''}`}>
                 {!isSidebarCollapsed && (
                   <div className="flex items-center gap-3">
@@ -1136,23 +1230,39 @@ interface AdminUser {
                         <h4 className="font-playfair font-bold text-xs truncate text-white" title={adminName}>{adminName}</h4>
                         <button 
                           onClick={async () => {
-                            const newName = prompt('Enter new Admin Name:', adminName);
-                            if (newName && newName.trim()) {
-                              const trimmed = newName.trim();
-                              setAdminName(trimmed);
-                              try {
-                                const res = await fetch(`${API_BASE_URL}/api/auth/users/update`, {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ email: 'admin@tribalcoffee.in', name: trimmed })
-                                });
-                                if (res.ok && setLoggedInUser) {
-                                  const data = await res.json();
-                                  setLoggedInUser(data.user);
+                            const newName = prompt('Enter new Admin Name (leave blank to keep current):', adminName);
+                            if (newName === null) return;
+                            
+                            const newPassword = prompt('Enter a new password (leave blank to keep current):');
+                            if (newPassword === null) return;
+
+                            const trimmedName = newName.trim() || adminName;
+                            setAdminName(trimmedName);
+                            
+                            const updatePayload: any = { 
+                              email: loggedInUser?.email || 'admin@tribalcoffee.com', 
+                              name: trimmedName 
+                            };
+                            
+                            if (newPassword && newPassword.trim()) {
+                              updatePayload.password = newPassword.trim();
+                            }
+                            
+                            try {
+                              const res = await fetch(`${API_BASE_URL}/api/auth/users/update`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(updatePayload)
+                              });
+                              if (res.ok && setLoggedInUser) {
+                                const data = await res.json();
+                                setLoggedInUser(data.user);
+                                if (updatePayload.password) {
+                                  alert('Profile and password successfully updated in users.json!');
                                 }
-                              } catch (e) {
-                                console.error('Failed to save admin name in backend:', e);
                               }
+                            } catch (e) {
+                              console.error('Failed to save admin profile:', e);
                             }
                           }}
                           className="text-gray-400 hover:text-[#D4AF37] transition-colors p-0.5 rounded cursor-pointer shrink-0"
@@ -1161,15 +1271,17 @@ interface AdminUser {
                           <Edit3 size={10} />
                         </button>
                       </div>
-                      <p className="text-[9px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest mt-0.5">Owner / Super Admin</p>
+                      <p className="text-[9px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest mt-0.5">{loggedInUser?.role || 'Authenticating...'}</p>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Sidebar Menu options */}
-              <div className="p-4 flex flex-col gap-2">
-                {/* 1. Overview */}
+              <div className="p-4 flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar">
+                {loggedInUser?.role === 'Super Admin' && (
+                  <>
+                    {/* 1. Overview */}
                 <button
                   onClick={() => setActiveTab('analytics')}
                   className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
@@ -1187,6 +1299,11 @@ interface AdminUser {
                   </div>
                   {!isSidebarCollapsed && <ChevronRight size={14} className={activeTab === 'analytics' ? 'text-[#050505]' : 'text-gray-500'} />}
                 </button>
+                  </>
+                )}
+
+                {['Super Admin', 'Lounge Manager'].includes(loggedInUser?.role) && (
+                  <>
 
                 {/* 2. Product Database */}
                 <button
@@ -1238,6 +1355,9 @@ interface AdminUser {
                   )}
                 </button>
 
+                  </>
+                )}
+
                 {/* 4. Shiprocket */}
                 <button
                   onClick={() => setActiveTab('shiprocket')}
@@ -1263,7 +1383,9 @@ interface AdminUser {
                   )}
                 </button>
 
-                {/* 4.5. Delivery Partners */}
+                {['Super Admin', 'Lounge Manager'].includes(loggedInUser?.role) && (
+                  <>
+                    {/* 4.5. Delivery Partners */}
                 <button
                   onClick={() => setActiveTab('deliveryPartners')}
                   className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
@@ -1281,29 +1403,12 @@ interface AdminUser {
                   </div>
                   {!isSidebarCollapsed && <ChevronRight size={14} className={activeTab === 'deliveryPartners' ? 'text-[#050505]' : 'text-gray-500'} />}
                 </button>
+                  </>
+                )}
 
-                {/* 5. Live Chat */}
-                <button
-                  onClick={() => setActiveTab('chat')}
-                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
-                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
-                  } ${
-                    activeTab === 'chat'
-                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
-                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
-                  }`}
-                  title="Live Chat Desk"
-                >
-                  <div className="flex items-center gap-3">
-                    <Send size={16} />
-                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Live Chat</span>}
-                  </div>
-                  {!isSidebarCollapsed && (
-                    <span className="bg-emerald-950 border border-emerald-500/30 text-emerald-400 text-[8px] font-sans px-2 py-0.5 rounded-full uppercase tracking-wider font-bold animate-pulse">
-                      Live
-                    </span>
-                  )}
-                </button>
+                {loggedInUser?.role === 'Super Admin' && (
+                  <>
+
 
                 {/* 6. Multi-Admin */}
                 <button
@@ -1342,6 +1447,8 @@ interface AdminUser {
                   </div>
                   {!isSidebarCollapsed && <ChevronRight size={14} className={activeTab === 'audit' ? 'text-[#050505]' : 'text-gray-500'} />}
                 </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1435,7 +1542,7 @@ interface AdminUser {
                   </div>
                   <div className="hidden md:block">
                     <span className="font-playfair font-bold text-xs text-white block leading-tight">{adminName}</span>
-                    <span className="text-[8px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest block mt-0.5">Super Admin</span>
+                    <span className="text-[8px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest block mt-0.5">{loggedInUser?.role || 'Super Admin'}</span>
                   </div>
                 </div>
 
@@ -2220,6 +2327,29 @@ interface AdminUser {
                           >
                             New Requests
                           </button>
+                          
+                          {/* New tabs primarily for Dispatcher workflow */}
+                          <button
+                            onClick={() => setOrderSubTab('pending_delivery')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                              orderSubTab === 'pending_delivery'
+                                ? 'bg-[#D4AF37] text-[#050505]'
+                                : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            Pending Delivery
+                          </button>
+                          <button
+                            onClick={() => setOrderSubTab('out_for_delivery')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                              orderSubTab === 'out_for_delivery'
+                                ? 'bg-[#D4AF37] text-[#050505]'
+                                : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            Out of Delivery
+                          </button>
+
                           <button
                             onClick={() => setOrderSubTab('history')}
                             className={`px-4 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase tracking-wider transition-all cursor-pointer ${
@@ -2325,24 +2455,73 @@ interface AdminUser {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5 font-sans text-xs">
-                          {filteredShipments.filter(s => 
-                            orderSubTab === 'new_requests'
-                              ? (s.status === 'Pending' || s.status === 'Ready to Ship')
-                              : (s.status === 'Dispatched' || s.status === 'Delivered')
-                          ).length > 0 ? (
-                            filteredShipments.filter(s => 
-                              orderSubTab === 'new_requests'
-                                ? (s.status === 'Pending' || s.status === 'Ready to Ship')
-                                : (s.status === 'Dispatched' || s.status === 'Delivered')
-                            ).map((s) => (
+                          {(() => {
+                            const filterBySubTab = (s: ShipmentOrder) => {
+                              if (orderSubTab === 'new_requests') {
+                                return loggedInUser?.role === 'Dispatcher' ? s.status === 'Ready to Ship' : (s.status === 'Pending' || s.status === 'Ready to Ship');
+                              }
+                              if (orderSubTab === 'pending_delivery') {
+                                return s.status === 'Dispatched';
+                              }
+                              if (orderSubTab === 'out_for_delivery') {
+                                return s.status === 'Out for Delivery';
+                              }
+                              return s.status === 'Delivered' || s.status === 'Declined';
+                            };
+                            
+                            const finalShipments = filteredShipments.filter(filterBySubTab);
+                            
+                            if (finalShipments.length === 0) {
+                              return (
+                                <tr>
+                                  <td colSpan={6} className="py-12 text-center text-gray-500 font-medium">
+                                    <HelpCircle className="mx-auto mb-3 text-white/10" size={32} />
+                                    No matching shipments or bookings found.
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            
+                            return finalShipments.map((s) => (
                               <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
                                 <td className="py-4 px-6 font-bold text-white">
                                   {s.id}
                                   <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate max-w-[200px]" title={s.productName}>{s.productName}</div>
                                 </td>
                                 <td className="py-4 px-6">
-                                  <div className="font-bold text-white">{s.customerName}</div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5">{s.city} (PIN: {s.pincode})</div>
+                                  <div className="font-bold text-white mb-0.5">{s.customerName}</div>
+                                  <div className="text-[10px] text-gray-500 font-mono tracking-wider">{s.email}</div>
+                                  
+                                  {(() => {
+                                    const matchedUser = registeredUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
+                                    const displayPhone = s.phone || matchedUser?.phone || 'No phone provided';
+                                    const addressObj = s.fullAddress || matchedUser?.address;
+                                    
+                                    let displayAddress = `${s.city} (PIN: ${s.pincode})`;
+                                    if (addressObj) {
+                                      if (typeof addressObj === 'string') {
+                                        displayAddress = addressObj;
+                                      } else {
+                                        displayAddress = [
+                                          addressObj.doorNo, 
+                                          addressObj.area, 
+                                          addressObj.landmark, 
+                                          addressObj.city, 
+                                          addressObj.state, 
+                                          addressObj.pinCode || addressObj.pincode
+                                        ].filter(Boolean).join(', ');
+                                      }
+                                    }
+                                    
+                                    return (
+                                      <>
+                                        <div className="text-[10px] text-gray-400 mt-1">{displayPhone}</div>
+                                        <div className="text-[9px] text-gray-500 mt-1 leading-relaxed max-w-[220px]">
+                                          {displayAddress}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="py-4 px-6 text-gray-400 font-medium">
                                   {s.date || 'N/A'}
@@ -2360,6 +2539,7 @@ interface AdminUser {
                                 <td className="py-4 px-6">
                                   <span className={`px-3 py-1 rounded-full text-[9px] font-sans font-bold uppercase tracking-wider border ${
                                     s.status === 'Pending' ? 'bg-red-950/20 border-red-500/20 text-red-300' :
+                                    s.status === 'Declined' ? 'bg-red-950/40 border-red-500/40 text-red-400' :
                                     s.status === 'Ready to Ship' ? 'bg-amber-950/20 border-amber-500/20 text-amber-300' :
                                     s.status === 'Dispatched' ? 'bg-indigo-950/20 border-indigo-500/20 text-indigo-300' :
                                     'bg-emerald-950/20 border-emerald-500/20 text-emerald-300'
@@ -2369,15 +2549,72 @@ interface AdminUser {
                                 </td>
                                 <td className="py-4 px-6 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                    {s.status === 'Pending' || s.status === 'Ready to Ship' ? (
-                                      <button
-                                        onClick={() => handleDispatchShipment(s.id, 'Delhivery Prime - Express')}
-                                        className="px-4 py-2 bg-[#D4AF37] text-[#050505] font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-[#F4E2B8] transition-all cursor-pointer shadow-md font-bold"
-                                      >
-                                        Generate AWB
-                                      </button>
+                                    {s.status === 'Pending' ? (
+                                      ['Super Admin', 'Lounge Manager'].includes(loggedInUser?.role) ? (
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => handleDeclineShipment(s.id)}
+                                            className="px-4 py-2 bg-red-950/40 text-red-400 border border-red-500/20 font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-red-900/40 transition-all cursor-pointer shadow-md"
+                                          >
+                                            Decline
+                                          </button>
+                                          <button
+                                            onClick={() => handleAcceptShipment(s.id)}
+                                            className="px-4 py-2 bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-emerald-900/40 transition-all cursor-pointer shadow-md font-bold"
+                                          >
+                                            Accept
+                                          </button>
+                                        </div>
+                                      ) : null
+                                    ) : s.status === 'Ready to Ship' ? (
+                                      loggedInUser?.role === 'Dispatcher' ? (
+                                        <button
+                                          onClick={() => handleDispatchShipment(s.id, 'Delhivery Prime - Express')}
+                                          className="px-4 py-2 bg-[#D4AF37] text-[#050505] font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-[#F4E2B8] transition-all cursor-pointer shadow-md font-bold"
+                                        >
+                                          Generate AWB
+                                        </button>
+                                      ) : (
+                                        <span className="text-[10px] font-bold uppercase text-amber-500/60 tracking-wider">Awaiting Dispatcher</span>
+                                      )
+                                    ) : s.status === 'Declined' ? (
+                                      <span className="text-[10px] font-bold uppercase text-red-500/60">Declined</span>
+                                    ) : s.status === 'Dispatched' ? (
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleOutForDeliveryShipment(s.id)}
+                                          className="px-4 py-2 bg-indigo-950/40 text-indigo-400 border border-indigo-500/20 font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-900/40 transition-all cursor-pointer shadow-md font-bold"
+                                        >
+                                          Out of Delivery
+                                        </button>
+                                        <button
+                                          onClick={() => onViewInvoice(s)}
+                                          className="px-3 py-2 bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/25 hover:bg-[#D4AF37]/40 font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        >
+                                          <FileText size={10} />
+                                          Invoice
+                                        </button>
+                                      </div>
+                                    ) : s.status === 'Out for Delivery' ? (
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-bold uppercase text-indigo-400 tracking-wider">Out for Delivery</span>
+                                        <button
+                                          onClick={() => onViewInvoice(s)}
+                                          className="px-3 py-2 bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/25 hover:bg-[#D4AF37]/40 font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        >
+                                          <FileText size={10} />
+                                          Invoice
+                                        </button>
+                                      </div>
                                     ) : (
                                       <>
+                                        <button
+                                          onClick={() => onViewInvoice(s)}
+                                          className="px-3 py-2 bg-[#D4AF37]/20 hover:bg-[#D4AF37]/40 border border-[#D4AF37]/25 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-[#D4AF37] transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        >
+                                          <FileText size={10} />
+                                          Invoice
+                                        </button>
                                         <button
                                           onClick={() => setSelectedLabelShipment(s)}
                                           className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-white hover:text-[#D4AF37] transition-all cursor-pointer flex items-center gap-1 font-bold"
@@ -2397,15 +2634,8 @@ interface AdminUser {
                                   </div>
                                 </td>
                               </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={6} className="py-12 text-center text-gray-500 font-medium">
-                                <HelpCircle className="mx-auto mb-3 text-white/10" size={32} />
-                                No matching shipments or bookings found.
-                              </td>
-                            </tr>
-                          )}
+                            ));
+                          })()}
                         </tbody>
                       </table>
                     </div>
@@ -2896,7 +3126,7 @@ interface AdminUser {
                                           const res = await fetch(`${API_BASE_URL}/api/auth/users/update`, {
                                             method: 'PUT',
                                             headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ email: 'admin@tribalcoffee.in', name: trimmed })
+                                            body: JSON.stringify({ email: 'admin@tribalcoffee.com', name: trimmed })
                                           });
                                           if (res.ok && setLoggedInUser) {
                                             const data = await res.json();
@@ -3677,6 +3907,18 @@ interface AdminUser {
                 </div>
 
                 <div>
+                  <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Admin Password</label>
+                  <input
+                    type="text"
+                    required
+                    value={invitePassword}
+                    onChange={(e) => setInvitePassword(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30"
+                    placeholder="e.g. securepass123"
+                  />
+                </div>
+
+                <div>
                   <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Access Privilege Role</label>
                   <select
                     value={inviteRole}
@@ -3684,7 +3926,7 @@ interface AdminUser {
                     className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none cursor-pointer"
                   >
                     <option value="Lounge Manager">Lounge Manager (CRUD Access)</option>
-                    <option value="Dispatcher">Dispatcher (Shiprocket Only)</option>
+                    <option value="Dispatcher">Dispatcher</option>
                     <option value="Super Admin">Super Admin (All Privileges)</option>
                   </select>
                 </div>
