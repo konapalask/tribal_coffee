@@ -4,12 +4,13 @@ import {
   Lock, Trash2, Edit3, X, ChevronRight,
   TrendingUp, Layers, Send, Truck, FileText, PlusCircle, LogOut,
   Users, CheckCircle2, UserPlus, Search, AlertCircle,
-  HelpCircle, Shield, RefreshCw, Database, ShieldAlert
+  HelpCircle, Shield, RefreshCw, Database, ShieldAlert, Sliders
 } from 'lucide-react';
 import {
   TRIBAL_PRODUCTS, addProduct, updateProduct, deleteProduct,
   resetDB, type RealProduct, API_BASE_URL
 } from '../services/db';
+import * as XLSX from 'xlsx';
 
 // Interfaces for mock structures
 interface ShipmentOrder {
@@ -58,7 +59,7 @@ interface AdminUser {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [adminName, setAdminName] = useState(loggedInUser?.name || 'Sharmila K');
   // General navigation
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'customers' | 'shiprocket' | 'chat' | 'admins' | 'audit'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'customers' | 'shiprocket' | 'deliveryPartners' | 'chat' | 'admins' | 'audit'>('analytics');
 
   // Sidebar collapsible state with localStorage persistence
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => localStorage.getItem('admin_sidebar_collapsed') === 'true');
@@ -91,6 +92,9 @@ interface AdminUser {
   const [formBody, setFormBody] = useState(3);
   const [formChicory, setFormChicory] = useState('0% Chicory');
   const [formPrice, setFormPrice] = useState(399);
+  const [formPrice750g, setFormPrice750g] = useState(749);
+  const [formSize1Name, setFormSize1Name] = useState('350g');
+  const [formSize2Name, setFormSize2Name] = useState('750g');
   const [formOriginalPrice, setFormOriginalPrice] = useState('');
   const [formTastingNotes, setFormTastingNotes] = useState('');
   const [formImage, setFormImage] = useState('/images/Arabica Coffee Beans.webp');
@@ -107,7 +111,94 @@ interface AdminUser {
   const [shippingRates, setShippingRates] = useState<any[] | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedLabelShipment, setSelectedLabelShipment] = useState<ShipmentOrder | null>(null);
+
+  // Delivery Providers State
+  const [deliveryProviders, setDeliveryProviders] = useState<any[]>([]);
+  const [isProvidersLoading, setIsProvidersLoading] = useState(false);
+  const [providerSaveStatus, setProviderSaveStatus] = useState<string | null>(null);
+  
+  // Custom Provider Modal State
+  const [isAddProviderModalOpen, setIsAddProviderModalOpen] = useState(false);
+  const [formNewProvider, setFormNewProvider] = useState({
+    name: '', id: '', api_base_url: '', api_key: '', secret_key: '',
+    tracking_endpoint: '', shipment_endpoint: '', webhook_url: '', logo_url: ''
+  });
+
+  // Date and Monthly filtering states
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterMonth, setFilterMonth] = useState('all');
+  const [orderSubTab, setOrderSubTab] = useState<'new_requests' | 'history'>('new_requests');
   const [selectedTrackingShipment, setSelectedTrackingShipment] = useState<ShipmentOrder | null>(null);
+
+  const parseBookingDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+    const dashParts = dateStr.split('-');
+    if (dashParts.length === 3) {
+      const year = parseInt(dashParts[0], 10);
+      const month = parseInt(dashParts[1], 10) - 1;
+      const day = parseInt(dashParts[2], 10);
+      return new Date(year, month, day);
+    }
+    return null;
+  };
+
+  const filteredShipments = shipments.filter(s => {
+    // 1. Month Filter (YYYY-MM)
+    if (filterMonth !== 'all' && s.date) {
+      const dateObj = parseBookingDate(s.date);
+      if (dateObj) {
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const formattedMonth = `${year}-${month}`;
+        if (formattedMonth !== filterMonth) return false;
+      } else {
+        return false;
+      }
+    }
+
+    // 2. Custom Date Range Filters
+    if (s.date) {
+      const dateObj = parseBookingDate(s.date);
+      if (dateObj) {
+        if (filterStartDate) {
+          const start = new Date(filterStartDate);
+          start.setHours(0, 0, 0, 0);
+          if (dateObj < start) return false;
+        }
+        if (filterEndDate) {
+          const end = new Date(filterEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (dateObj > end) return false;
+        }
+      }
+    }
+
+    return true;
+  });
+
+  useEffect(() => {
+    if (activeTab === 'deliveryPartners') {
+      setIsProvidersLoading(true);
+      fetch(`${API_BASE_URL}/api/delivery-providers`)
+        .then(res => res.json())
+        .then(data => {
+          setDeliveryProviders(data);
+          setIsProvidersLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setIsProvidersLoading(false);
+        });
+    }
+  }, [activeTab]);
   // Live Chat states
   const [chats, setChats] = useState<ActiveChat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>('');
@@ -434,7 +525,10 @@ interface AdminUser {
     setFormAcidity(2);
     setFormBody(4);
     setFormChicory('0% Chicory');
-    setFormPrice(449);
+    setFormPrice(499);
+    setFormPrice750g(899);
+    setFormSize1Name('350g');
+    setFormSize2Name('750g');
     setFormOriginalPrice('');
     setFormTastingNotes('Sweet Caramel, Dark Cacao, Fruit Compote');
     setFormImage('/images/Arabica Coffee Beans.webp');
@@ -458,6 +552,9 @@ interface AdminUser {
     setFormBody(product.body);
     setFormChicory(product.chicory);
     setFormPrice(product.price);
+    setFormPrice750g(product.price750g || Math.round(product.price * 1.8));
+    setFormSize1Name(product.size1Name || '350g');
+    setFormSize2Name(product.size2Name || '750g');
     setFormOriginalPrice(product.originalPrice ? String(product.originalPrice) : '');
     setFormTastingNotes(product.tastingNotes.join(', '));
     setFormImage(product.image);
@@ -487,6 +584,9 @@ interface AdminUser {
       chicory: formChicory,
       tastingNotes: parsedNotes.length ? parsedNotes : ['Chocolate notes'],
       price: Number(formPrice),
+      price750g: Number(formPrice750g),
+      size1Name: formSize1Name || '350g',
+      size2Name: formSize2Name || '750g',
       originalPrice: formOriginalPrice ? Number(formOriginalPrice) : undefined,
       image: formImage,
       description: formDescription || 'Custom batch roasted to perfection in our volcanic wood furnaces.',
@@ -549,6 +649,129 @@ interface AdminUser {
     } catch (e) {
       console.error('Failed to dispatch shipment in backend:', e);
     }
+  };
+
+  // Delivery Providers Handlers
+  const handleUpdateProvider = (id: string, field: string, value: any) => {
+    setDeliveryProviders(prev => prev.map(p => {
+      if (p.id === id) {
+        if (field === 'is_default' && value === true) {
+          return { ...p, is_default: true, is_enabled: true };
+        }
+        return { ...p, [field]: value };
+      } else {
+        if (field === 'is_default' && value === true) {
+          return { ...p, is_default: false };
+        }
+        return p;
+      }
+    }));
+  };
+
+  const handleSaveProviders = () => {
+    setProviderSaveStatus('Saving...');
+    fetch(`${API_BASE_URL}/api/delivery-providers/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(deliveryProviders)
+    })
+      .then(res => res.json())
+      .then(() => {
+        setProviderSaveStatus('Saved Successfully ✓');
+        setTimeout(() => setProviderSaveStatus(null), 3000);
+      })
+      .catch(err => {
+        console.error(err);
+        setProviderSaveStatus('Save Failed ✗');
+        setTimeout(() => setProviderSaveStatus(null), 3000);
+      });
+  };
+
+  const handleTestProvider = (id: string) => {
+    fetch(`${API_BASE_URL}/api/delivery-providers/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    })
+      .then(res => res.json())
+      .then(data => alert(data.message))
+      .catch(err => {
+        console.error(err);
+        alert('API Test connection error.');
+      });
+  };
+
+  const handleAddCustomProvider = () => {
+    if (!formNewProvider.name || !formNewProvider.api_base_url) {
+      alert("Name and API Base URL are required.");
+      return;
+    }
+    
+    // Auto-generate ID if not provided
+    const newId = formNewProvider.id || formNewProvider.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    
+    const newProviderObj = {
+      ...formNewProvider,
+      id: newId,
+      is_custom: true,
+      is_enabled: false,
+      is_default: false
+    };
+
+    setDeliveryProviders(prev => [...prev, newProviderObj]);
+    setIsAddProviderModalOpen(false);
+    setFormNewProvider({
+      name: '', id: '', api_base_url: '', api_key: '', secret_key: '',
+      tracking_endpoint: '', shipment_endpoint: '', webhook_url: '', logo_url: ''
+    });
+  };
+
+  const handleDeleteProvider = (id: string) => {
+    if (confirm("Are you sure you want to delete this custom provider?")) {
+      setDeliveryProviders(prev => prev.filter(p => p.id !== id));
+    }
+  };
+
+  const handleExportToExcel = () => {
+    const activeShipments = filteredShipments.filter(s => 
+      orderSubTab === 'new_requests'
+        ? (s.status === 'Pending' || s.status === 'Ready to Ship')
+        : (s.status === 'Dispatched' || s.status === 'Delivered')
+    );
+
+    if (activeShipments.length === 0) {
+      alert("No data to export for the selected filters.");
+      return;
+    }
+
+    const exportData = activeShipments.map(s => ({
+      'Order ID': s.id,
+      'Date': s.date || 'N/A',
+      'Customer Name': s.customerName,
+      'Email': s.email,
+      'City': s.city,
+      'Pincode': s.pincode,
+      'Product(s)': s.productName,
+      'Amount (₹)': s.amount,
+      'Status': s.status,
+      'AWB / Logistics': s.awb ? `${s.awb} (${s.courier})` : 'Not Dispatched'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+
+    let fileName = 'Tribal_Coffee_Orders_Report';
+    if (filterMonth !== 'all') {
+      fileName += `_${filterMonth}`;
+    } else if (filterStartDate && filterEndDate) {
+      fileName += `_${filterStartDate}_to_${filterEndDate}`;
+    } else {
+      fileName += `_All_Time`;
+    }
+    fileName += '.xlsx';
+
+    XLSX.writeFile(workbook, fileName);
   };
 
   // Chat message send handler
@@ -1038,6 +1261,25 @@ interface AdminUser {
                       Syncing
                     </span>
                   )}
+                </button>
+
+                {/* 4.5. Delivery Partners */}
+                <button
+                  onClick={() => setActiveTab('deliveryPartners')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center transition-all duration-300 cursor-pointer ${
+                    isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                  } ${
+                    activeTab === 'deliveryPartners'
+                      ? 'bg-[#D4AF37] text-[#050505] font-bold shadow-[0_4px_16px_rgba(212,175,55,0.2)]'
+                      : 'bg-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                  title="Delivery Partners API"
+                >
+                  <div className="flex items-center gap-3">
+                    <Sliders size={16} />
+                    {!isSidebarCollapsed && <span className="font-sans text-xs tracking-wider uppercase font-bold">Providers</span>}
+                  </div>
+                  {!isSidebarCollapsed && <ChevronRight size={14} className={activeTab === 'deliveryPartners' ? 'text-[#050505]' : 'text-gray-500'} />}
                 </button>
 
                 {/* 5. Live Chat */}
@@ -1964,9 +2206,110 @@ interface AdminUser {
 
                   {/* Shiprocket Shipments list */}
                   <div className="bg-[#0D0D0D] border border-[#D4AF37]/15 rounded-3xl overflow-hidden shadow-xl">
-                    <div className="bg-[#0D0D0D]/90 border-b border-[#D4AF37]/15 px-6 py-4 flex items-center justify-between">
-                      <h4 className="font-playfair font-bold text-base text-white">Logistics Fulfillment Dashboard</h4>
-                      <span className="text-[9px] text-[#D4AF37] font-sans font-bold uppercase tracking-widest">Shipment Sync Active</span>
+                    <div className="bg-[#0D0D0D]/90 border-b border-[#D4AF37]/15 px-6 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div>
+                        {/* Sub tab switcher inside header */}
+                        <div className="flex gap-2 p-1 bg-[#050505] border border-white/5 rounded-xl w-fit">
+                          <button
+                            onClick={() => setOrderSubTab('new_requests')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                              orderSubTab === 'new_requests'
+                                ? 'bg-[#D4AF37] text-[#050505]'
+                                : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            New Requests
+                          </button>
+                          <button
+                            onClick={() => setOrderSubTab('history')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-sans font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                              orderSubTab === 'history'
+                                ? 'bg-[#D4AF37] text-[#050505]'
+                                : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            Archive & History
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Clean premium date filter controls */}
+                      <div className="flex flex-wrap items-center gap-3">
+                        {/* Monthly selector */}
+                        <div className="flex flex-col text-left">
+                          <span className="text-[8px] text-gray-500 font-sans uppercase tracking-widest font-bold mb-1">Quick Month</span>
+                          <select
+                            value={filterMonth}
+                            onChange={(e) => {
+                              setFilterMonth(e.target.value);
+                              if (e.target.value !== 'all') {
+                                setFilterStartDate('');
+                                setFilterEndDate('');
+                              }
+                            }}
+                            className="bg-[#050505] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-sans text-white focus:outline-none cursor-pointer focus:border-[#D4AF37]"
+                          >
+                            <option value="all">All Months</option>
+                            <option value="2026-06">June 2026</option>
+                            <option value="2026-05">May 2026</option>
+                            <option value="2026-04">April 2026</option>
+                            <option value="2026-03">March 2026</option>
+                            <option value="2026-02">February 2026</option>
+                            <option value="2026-01">January 2026</option>
+                            <option value="2025-12">December 2025</option>
+                          </select>
+                        </div>
+
+                        {/* Start Date */}
+                        <div className="flex flex-col text-left">
+                          <span className="text-[8px] text-gray-500 font-sans uppercase tracking-widest font-bold mb-1">Start Date</span>
+                          <input
+                            type="date"
+                            value={filterStartDate}
+                            onChange={(e) => {
+                              setFilterStartDate(e.target.value);
+                              if (e.target.value) setFilterMonth('all');
+                            }}
+                            className="bg-[#050505] border border-white/10 rounded-xl px-3 py-1 text-xs font-sans text-white focus:outline-none focus:border-[#D4AF37]"
+                          />
+                        </div>
+
+                        {/* End Date */}
+                        <div className="flex flex-col text-left">
+                          <span className="text-[8px] text-gray-500 font-sans uppercase tracking-widest font-bold mb-1">End Date</span>
+                          <input
+                            type="date"
+                            value={filterEndDate}
+                            onChange={(e) => {
+                              setFilterEndDate(e.target.value);
+                              if (e.target.value) setFilterMonth('all');
+                            }}
+                            className="bg-[#050505] border border-white/10 rounded-xl px-3 py-1 text-xs font-sans text-white focus:outline-none focus:border-[#D4AF37]"
+                          />
+                        </div>
+
+                        {/* Reset Filters button */}
+                        {(filterMonth !== 'all' || filterStartDate || filterEndDate) && (
+                          <button
+                            onClick={() => {
+                              setFilterMonth('all');
+                              setFilterStartDate('');
+                              setFilterEndDate('');
+                            }}
+                            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-sans text-white uppercase tracking-wider font-bold transition-all cursor-pointer mt-3"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <button
+                          onClick={handleExportToExcel}
+                          className="px-3 py-1.5 bg-[#D4AF37] text-[#050505] hover:bg-[#F4E2B8] border border-transparent rounded-xl text-[10px] font-sans uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-1 mt-3"
+                          title="Download Report as Excel"
+                        >
+                          <FileText size={10} className="stroke-[2.5]" />
+                          Export Excel
+                        </button>
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -1975,78 +2318,412 @@ interface AdminUser {
                           <tr className="border-b border-[#D4AF37]/15 text-[10px] text-[#D4AF37] uppercase tracking-[0.2em] bg-[#0D0D0D] font-bold">
                             <th className="py-4 px-6">Consignment ID</th>
                             <th className="py-4 px-6">Customer Details</th>
+                            <th className="py-4 px-6">Date</th>
                             <th className="py-4 px-6">AWB Logistics Code</th>
                             <th className="py-4 px-6">Fulfillment Status</th>
                             <th className="py-4 px-6 text-center">Fulfillment Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5 font-sans text-xs">
-                          {shipments.map((s) => (
-                            <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
-                              <td className="py-4 px-6 font-bold text-white">
-                                {s.id}
-                                <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate max-w-[200px]" title={s.productName}>{s.productName}</div>
-                              </td>
-                              <td className="py-4 px-6">
-                                <div className="font-bold text-white">{s.customerName}</div>
-                                <div className="text-[10px] text-gray-500 mt-0.5">{s.city} (PIN: {s.pincode})</div>
-                              </td>
-                              <td className="py-4 px-6">
-                                {s.awb ? (
-                                  <div>
-                                    <div className="font-bold text-[#D4AF37] tracking-widest">{s.awb}</div>
-                                    <div className="text-[10px] text-gray-500 mt-0.5">{s.courier}</div>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-gray-600 uppercase tracking-widest">Awaiting Dispatch</span>
-                                )}
-                              </td>
-                              <td className="py-4 px-6">
-                                <span className={`px-3 py-1 rounded-full text-[9px] font-sans font-bold uppercase tracking-wider border ${
-                                  s.status === 'Pending' ? 'bg-red-950/20 border-red-500/20 text-red-300' :
-                                  s.status === 'Ready to Ship' ? 'bg-amber-950/20 border-amber-500/20 text-amber-300' :
-                                  s.status === 'Dispatched' ? 'bg-indigo-950/20 border-indigo-500/20 text-indigo-300' :
-                                  'bg-emerald-950/20 border-emerald-500/20 text-emerald-300'
-                                }`}>
-                                  {s.status}
-                                </span>
-                              </td>
-                              <td className="py-4 px-6 text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                  {s.status === 'Pending' || s.status === 'Ready to Ship' ? (
-                                    <button
-                                      onClick={() => handleDispatchShipment(s.id, 'Delhivery Prime - Express')}
-                                      className="px-4 py-2 bg-[#D4AF37] text-[#050505] font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-[#F4E2B8] transition-all cursor-pointer shadow-md font-bold"
-                                    >
-                                      Generate AWB
-                                    </button>
+                          {filteredShipments.filter(s => 
+                            orderSubTab === 'new_requests'
+                              ? (s.status === 'Pending' || s.status === 'Ready to Ship')
+                              : (s.status === 'Dispatched' || s.status === 'Delivered')
+                          ).length > 0 ? (
+                            filteredShipments.filter(s => 
+                              orderSubTab === 'new_requests'
+                                ? (s.status === 'Pending' || s.status === 'Ready to Ship')
+                                : (s.status === 'Dispatched' || s.status === 'Delivered')
+                            ).map((s) => (
+                              <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
+                                <td className="py-4 px-6 font-bold text-white">
+                                  {s.id}
+                                  <div className="text-[10px] text-gray-500 font-normal mt-0.5 truncate max-w-[200px]" title={s.productName}>{s.productName}</div>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <div className="font-bold text-white">{s.customerName}</div>
+                                  <div className="text-[10px] text-gray-500 mt-0.5">{s.city} (PIN: {s.pincode})</div>
+                                </td>
+                                <td className="py-4 px-6 text-gray-400 font-medium">
+                                  {s.date || 'N/A'}
+                                </td>
+                                <td className="py-4 px-6">
+                                  {s.awb ? (
+                                    <div>
+                                      <div className="font-bold text-[#D4AF37] tracking-widest">{s.awb}</div>
+                                      <div className="text-[10px] text-gray-500 mt-0.5">{s.courier}</div>
+                                    </div>
                                   ) : (
-                                    <>
-                                      <button
-                                        onClick={() => setSelectedLabelShipment(s)}
-                                        className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-white hover:text-[#D4AF37] transition-all cursor-pointer flex items-center gap-1 font-bold"
-                                      >
-                                        <FileText size={10} />
-                                        Label
-                                      </button>
-                                      <button
-                                        onClick={() => setSelectedTrackingShipment(s)}
-                                        className="px-3 py-2 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/25 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer flex items-center gap-1 font-bold"
-                                      >
-                                        <TrendingUp size={10} />
-                                        Track Live
-                                      </button>
-                                    </>
+                                    <span className="text-[10px] text-gray-600 uppercase tracking-widest">Awaiting Dispatch</span>
                                   )}
-                                </div>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <span className={`px-3 py-1 rounded-full text-[9px] font-sans font-bold uppercase tracking-wider border ${
+                                    s.status === 'Pending' ? 'bg-red-950/20 border-red-500/20 text-red-300' :
+                                    s.status === 'Ready to Ship' ? 'bg-amber-950/20 border-amber-500/20 text-amber-300' :
+                                    s.status === 'Dispatched' ? 'bg-indigo-950/20 border-indigo-500/20 text-indigo-300' :
+                                    'bg-emerald-950/20 border-emerald-500/20 text-emerald-300'
+                                  }`}>
+                                    {s.status}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-6 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    {s.status === 'Pending' || s.status === 'Ready to Ship' ? (
+                                      <button
+                                        onClick={() => handleDispatchShipment(s.id, 'Delhivery Prime - Express')}
+                                        className="px-4 py-2 bg-[#D4AF37] text-[#050505] font-sans text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-[#F4E2B8] transition-all cursor-pointer shadow-md font-bold"
+                                      >
+                                        Generate AWB
+                                      </button>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={() => setSelectedLabelShipment(s)}
+                                          className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-white hover:text-[#D4AF37] transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        >
+                                          <FileText size={10} />
+                                          Label
+                                        </button>
+                                        <button
+                                          onClick={() => setSelectedTrackingShipment(s)}
+                                          className="px-3 py-2 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/25 rounded-lg font-sans text-[10px] font-bold uppercase tracking-wider text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer flex items-center gap-1 font-bold"
+                                        >
+                                          <TrendingUp size={10} />
+                                          Track Live
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="py-12 text-center text-gray-500 font-medium">
+                                <HelpCircle className="mx-auto mb-3 text-white/10" size={32} />
+                                No matching shipments or bookings found.
                               </td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
                   </div>
 
+                </div>
+              )}
+
+              {/* TAB 4.5: DELIVERY PARTNERS */}
+              {activeTab === 'deliveryPartners' && (
+                <div className="flex flex-col gap-8 text-left max-w-7xl mx-auto pb-12">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#D4AF37]/15">
+                    <div>
+                      <span className="text-[10px] tracking-[0.25em] font-sans font-bold text-[#D4AF37] uppercase block">
+                        Carrier Routing Engine
+                      </span>
+                      <h1 className="text-2xl md:text-3xl font-playfair font-bold text-white mt-1">
+                        Shipping Provider Configuration
+                      </h1>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setIsAddProviderModalOpen(true)}
+                        className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-bold font-sans text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <PlusCircle size={14} /> Add Custom Provider
+                      </button>
+                      <button
+                        onClick={handleSaveProviders}
+                        className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#F4E2B8] text-[#050505] rounded-xl font-bold font-sans text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg"
+                      >
+                        {providerSaveStatus || 'Save Settings'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isProvidersLoading ? (
+                    <div className="text-center py-24 text-[#D4AF37] font-sans uppercase tracking-widest font-bold text-xs">
+                      <RefreshCw className="animate-spin mx-auto mb-4" size={32} />
+                      Loading Active Routing Systems...
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {deliveryProviders.map(provider => (
+                        <div key={provider.id} className="bg-[#0D0D0D] border border-white/5 p-6 rounded-3xl relative overflow-hidden flex flex-col group hover:border-[#D4AF37]/35 transition-all shadow-xl">
+                          {/* Active Glow */}
+                          {provider.is_enabled && (
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[40px] rounded-full pointer-events-none" />
+                          )}
+                          
+                          <div className="flex justify-between items-start mb-6 z-10">
+                            <div>
+                              <h3 className="font-playfair font-bold text-lg text-white">{provider.name}</h3>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${provider.is_enabled ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                                <span className="text-[9px] font-sans uppercase font-bold tracking-wider text-gray-400">
+                                  {provider.is_enabled ? 'Active Endpoint' : 'Offline'}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* Toggle Enable */}
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer" 
+                                checked={provider.is_enabled}
+                                onChange={(e) => handleUpdateProvider(provider.id, 'is_enabled', e.target.checked)}
+                              />
+                              <div className="w-10 h-5 bg-[#050505] border border-white/10 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-[#D4AF37] after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:border-[#D4AF37]/35"></div>
+                            </label>
+                          </div>
+
+                          <div className="space-y-4 z-10 flex-grow">
+                            <div>
+                              <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">API Key credential</label>
+                              <input
+                                type="text"
+                                value={provider.api_key}
+                                onChange={(e) => handleUpdateProvider(provider.id, 'api_key', e.target.value)}
+                                className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                placeholder="Enter credentials"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Secret Key credential</label>
+                              <input
+                                type="password"
+                                value={provider.secret_key}
+                                onChange={(e) => handleUpdateProvider(provider.id, 'secret_key', e.target.value)}
+                                className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                placeholder="•••••••••••••••"
+                              />
+                            </div>
+                            {provider.is_custom && (
+                              <>
+                                <div>
+                                  <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">API Base Endpoint</label>
+                                  <input
+                                    type="text"
+                                    value={provider.api_base_url || ''}
+                                    onChange={(e) => handleUpdateProvider(provider.id, 'api_base_url', e.target.value)}
+                                    className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                    placeholder="https://api.example.com"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Tracking Path</label>
+                                    <input
+                                      type="text"
+                                      value={provider.tracking_endpoint || ''}
+                                      onChange={(e) => handleUpdateProvider(provider.id, 'tracking_endpoint', e.target.value)}
+                                      className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                      placeholder="/track"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Shipment Path</label>
+                                    <input
+                                      type="text"
+                                      value={provider.shipment_endpoint || ''}
+                                      onChange={(e) => handleUpdateProvider(provider.id, 'shipment_endpoint', e.target.value)}
+                                      className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                      placeholder="/ship"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between z-10">
+                            <label className="flex items-center gap-2 cursor-pointer group/radio">
+                              <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${provider.is_default ? 'border-[#D4AF37] bg-[#D4AF37]/10' : 'border-white/20 group-hover/radio:border-white/40'}`}>
+                                {provider.is_default && <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" />}
+                              </div>
+                              <input 
+                                type="radio" 
+                                name="defaultProvider" 
+                                className="hidden"
+                                checked={provider.is_default}
+                                onChange={() => handleUpdateProvider(provider.id, 'is_default', true)}
+                              />
+                              <span className={`text-[9px] font-sans font-bold uppercase tracking-wider ${provider.is_default ? 'text-[#D4AF37]' : 'text-gray-500 group-hover/radio:text-gray-400'}`}>
+                                Default Engine
+                              </span>
+                            </label>
+                            
+                            <div className="flex gap-2">
+                              {provider.is_custom && (
+                                <button
+                                  onClick={() => handleDeleteProvider(provider.id)}
+                                  className="p-1 bg-red-950/20 hover:bg-red-950/40 text-red-400 hover:text-red-300 rounded border border-transparent transition-colors cursor-pointer"
+                                  title="Delete Provider"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleTestProvider(provider.id)}
+                                className="text-[9px] font-sans font-bold uppercase tracking-wider text-[#D4AF37] hover:text-[#F4E2B8] transition-colors flex items-center gap-1 cursor-pointer"
+                              >
+                                <Send size={10} />
+                                Connection test
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add Custom Provider Modal */}
+                  <AnimatePresence>
+                    {isAddProviderModalOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-left"
+                      >
+                        <motion.div 
+                          initial={{ scale: 0.95, y: 15 }}
+                          animate={{ scale: 1, y: 0 }}
+                          exit={{ scale: 0.95, y: 15 }}
+                          className="bg-[#0D0D0D] border border-white/10 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col"
+                        >
+                          <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0D0D0D] shrink-0">
+                            <h2 className="font-playfair font-bold text-lg text-white">Add Shipping Partner Engine</h2>
+                            <button onClick={() => setIsAddProviderModalOpen(false)} className="text-gray-500 hover:text-white transition-colors cursor-pointer">
+                              <X size={20} />
+                            </button>
+                          </div>
+                          
+                          <div className="p-6 overflow-y-auto space-y-5 flex-grow custom-scrollbar">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Provider Name *</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.name}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, name: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="e.g. Bluedart Direct"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Provider Slug ID</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.id}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, id: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="Auto generated slug"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Base Endpoint URL *</label>
+                              <input
+                                type="text"
+                                value={formNewProvider.api_base_url}
+                                onChange={(e) => setFormNewProvider({...formNewProvider, api_base_url: e.target.value})}
+                                className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                placeholder="https://api.bluedart.com/v1"
+                              />
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">API Username / Key</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.api_key}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, api_key: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="Optional"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">API Password / Secret</label>
+                                <input
+                                  type="password"
+                                  value={formNewProvider.secret_key}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, secret_key: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="Optional"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Shipment Path</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.shipment_endpoint}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, shipment_endpoint: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="/shipments"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Tracking Path</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.tracking_endpoint}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, tracking_endpoint: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="/track"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Webhook Webhook Endpoint</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.webhook_url}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, webhook_url: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="https://..."
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] font-bold font-sans text-gray-500 uppercase tracking-widest mb-1.5">Logo Link URL</label>
+                                <input
+                                  type="text"
+                                  value={formNewProvider.logo_url}
+                                  onChange={(e) => setFormNewProvider({...formNewProvider, logo_url: e.target.value})}
+                                  className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-[#D4AF37] outline-none transition-colors"
+                                  placeholder="https://..."
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="p-6 border-t border-white/5 bg-[#050505] flex justify-end shrink-0 gap-3">
+                            <button
+                              onClick={() => setIsAddProviderModalOpen(false)}
+                              className="px-5 py-2.5 rounded-xl font-bold font-sans text-xs uppercase tracking-wider text-gray-400 hover:text-white transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleAddCustomProvider}
+                              className="bg-[#D4AF37] text-[#050505] hover:bg-[#F4E2B8] px-5 py-2.5 rounded-xl font-bold font-sans text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+                            >
+                              <PlusCircle size={14} /> Add Provider
+                            </button>
+                          </div>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
 
@@ -2788,17 +3465,48 @@ interface AdminUser {
                   />
                 </div>
 
-                {/* Price */}
-                <div>
-                  <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Price (₹ INR)</label>
-                  <input
-                    type="number"
-                    required
-                    value={formPrice}
-                    onChange={(e) => setFormPrice(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 bg-espresso/50 border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30"
-                    placeholder="e.g. 449"
-                  />
+                {/* Price Sizing Config */}
+                <div className="md:col-span-2 grid grid-cols-2 gap-4 border border-[#D4AF37]/15 p-4 rounded-2xl bg-[#050505]/60 text-left">
+                  <div>
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Base Size Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={formSize1Name}
+                      onChange={(e) => setFormSize1Name(e.target.value)}
+                      className="w-full px-4 py-2 bg-[#050505] border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30 mb-3 text-xs"
+                      placeholder="e.g. 350g"
+                    />
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Base Price (₹ INR)</label>
+                    <input
+                      type="number"
+                      required
+                      value={formPrice}
+                      onChange={(e) => setFormPrice(Number(e.target.value))}
+                      className="w-full px-4 py-2 bg-[#050505] border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30 text-xs"
+                      placeholder="e.g. 449"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Large Size Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={formSize2Name}
+                      onChange={(e) => setFormSize2Name(e.target.value)}
+                      className="w-full px-4 py-2 bg-[#050505] border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30 mb-3 text-xs"
+                      placeholder="e.g. 750g"
+                    />
+                    <label className="text-[10px] text-cream-latte/60 uppercase tracking-wider mb-2 block font-bold">Large Price (₹ INR)</label>
+                    <input
+                      type="number"
+                      required
+                      value={formPrice750g}
+                      onChange={(e) => setFormPrice750g(Number(e.target.value))}
+                      className="w-full px-4 py-2 bg-[#050505] border border-cream-latte/10 rounded-xl text-cream-latte focus:outline-none focus:border-warm-gold/30 text-xs"
+                      placeholder="e.g. 849"
+                    />
+                  </div>
                 </div>
 
                 {/* Original Price */}
