@@ -53,7 +53,13 @@ if [ "$IS_VITE_REACT" = true ]; then
     mkdir -p "$PUBLIC_HTML"
     /bin/cp -R dist/* "$PUBLIC_HTML/"
     
-    echo "✔ React/Vite Frontend successfully deployed!"
+    # Also deploy to the cPanel test subdomain subdirectory if configured
+    SUBDOMAIN_PATH="$PUBLIC_HTML/test.tribalcoffee.in"
+    echo "Deploying built assets to cPanel subdomain path: $SUBDOMAIN_PATH"
+    mkdir -p "$SUBDOMAIN_PATH"
+    /bin/cp -R dist/* "$SUBDOMAIN_PATH/"
+    
+    echo "✔ React/Vite Frontend successfully deployed to both production and staging endpoints!"
 fi
 
 # 3. Deploy Node.js Backend with Data Preservation
