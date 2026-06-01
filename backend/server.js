@@ -26,14 +26,9 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 
-// Serve static assets (media, product images) from public/ directory
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve production frontend build files if they exist
-const frontendDistPath = path.join(__dirname, '../frontend/dist');
-if (fs.existsSync(frontendDistPath)) {
-  app.use(express.static(frontendDistPath));
-}
+// Serve static assets (media, product images, React build) from public/ directory
+const publicPath = path.join(__dirname, 'public');
+app.use(express.static(publicPath));
 
 // Production Health Routes
 app.get('/health', (req, res) => {
@@ -907,14 +902,16 @@ app.post('/api/delivery-providers/test', async (req, res) => {
 });
 
 // SPA fallback routing for client-side React routes on production
-if (fs.existsSync(frontendDistPath)) {
-  app.get('*', (req, res, next) => {
-    if (req.url.startsWith('/api')) {
-      return next();
-    }
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
-  });
-}
+app.get('*', (req, res, next) => {
+  if (req.url.startsWith('/api') || req.url.startsWith('/health')) {
+    return next();
+  }
+  const indexPath = path.join(publicPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  next();
+});
 
 // Start Server
 app.listen(PORT, () => {

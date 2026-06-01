@@ -49,13 +49,19 @@ if [ "$IS_VITE_REACT" = true ]; then
     echo "Building production assets..."
     npm run build
     
+    # Deploy to backend public directory so Express serves it natively
+    echo "Deploying built assets to backend public directory..."
+    mkdir -p "$REPO_PATH/backend/public"
+    /bin/cp -R dist/* "$REPO_PATH/backend/public/"
+    
+    # Deploy to public_html (Main Domain)
     echo "Deploying built assets to public_html..."
     mkdir -p "$PUBLIC_HTML"
     /bin/cp -R dist/* "$PUBLIC_HTML/"
     
-    # Also deploy to the cPanel test subdomain subdirectory if configured
+    # Deploy to Subdomain Directory (test.tribalcoffee.in)
     SUBDOMAIN_PATH="$PUBLIC_HTML/test.tribalcoffee.in"
-    echo "Deploying built assets to cPanel subdomain path: $SUBDOMAIN_PATH"
+    echo "Deploying to Subdomain: $SUBDOMAIN_PATH"
     mkdir -p "$SUBDOMAIN_PATH"
     /bin/cp -R dist/* "$SUBDOMAIN_PATH/"
     
@@ -95,11 +101,44 @@ if [ "$IS_NODE_BACKEND" = true ]; then
         ln -s "$PERSISTENT_UPLOADS" "public/uploads"
     fi
     
-    # 3.3 Install Production Dependencies
+    # 3.3 Generate production-ready .htaccess to force Passenger execution on cPanel
+    echo "Writing cPanel .htaccess Passenger routing configurations..."
+    
+    HTACCESS_CONTENT="# ===================================================
+# Tribal Coffee Production Routing Configuration
+# Routing all traffic via Phusion Passenger Node.js app
+# ===================================================
+
+<IfModule mod_passenger.c>
+    PassengerEnabled on
+    PassengerAppEnv \"production\"
+    PassengerAppRoot \"/home/backlzaj/tribalcoffee-v2/backend\"
+    PassengerBaseURI \"/\"
+    PassengerAppType \"node\"
+    PassengerStartupFile \"server.js\"
+</IfModule>
+
+# Rewrite fallback for SPA routing and API proxying
+RewriteEngine On
+RewriteRule ^index\.html$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]"
+
+    # Write .htaccess to main public_html
+    echo "$HTACCESS_CONTENT" > "$PUBLIC_HTML/.htaccess"
+    
+    # Write .htaccess to test subdomain
+    SUBDOMAIN_PATH="$PUBLIC_HTML/test.tribalcoffee.in"
+    if [ -d "$SUBDOMAIN_PATH" ]; then
+        echo "$HTACCESS_CONTENT" > "$SUBDOMAIN_PATH/.htaccess"
+    fi
+    
+    # 3.4 Install Production Dependencies
     echo "Installing production node dependencies..."
     npm install --only=production
     
-    # 3.4 Trigger Hot Restart (Passenger)
+    # 3.5 Trigger Hot Restart (Passenger)
     echo "Triggering zero-downtime Passenger restart..."
     mkdir -p "tmp"
     touch "tmp/restart.txt"
