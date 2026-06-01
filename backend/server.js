@@ -15,13 +15,38 @@ const PORT = process.env.PORT || 5001;
 
 // Middlewares
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://test.tribalcoffee.in',
+    'https://tribalcoffee.in',
+    'https://www.tribalcoffee.in'
+  ],
   credentials: true
 }));
 app.use(bodyParser.json());
 
 // Serve static assets (media, product images) from public/ directory
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve production frontend build files if they exist
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+}
+
+// Production Health Routes
+app.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    status: 'running',
+    environment: process.env.NODE_ENV || 'production'
+  });
+});
+
+app.get('/', (req, res) => {
+  res.status(200).send('Tribal Coffee Backend Running');
+});
 
 const DATA_FILE_PATH = path.join(__dirname, 'data', 'products.json');
 const USERS_FILE_PATH = path.join(__dirname, 'data', 'users.json');
@@ -880,6 +905,16 @@ app.post('/api/delivery-providers/test', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// SPA fallback routing for client-side React routes on production
+if (fs.existsSync(frontendDistPath)) {
+  app.get('*', (req, res, next) => {
+    if (req.url.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
 
 // Start Server
 app.listen(PORT, () => {
