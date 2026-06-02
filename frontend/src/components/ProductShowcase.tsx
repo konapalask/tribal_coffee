@@ -122,7 +122,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
               viewport={{ once: true, margin: '-100px' }}
               transition={{ duration: 0.8, delay: idx * 0.1, ease: [0.16, 1, 0.3, 1] }}
               id={`showcase-card-${product.id}`}
-              className={`group relative glass-premium-card ${isLowEnd ? 'none-blur' : ''} p-8 flex flex-col justify-between overflow-hidden text-left h-full`}
+              className={`group relative glass-premium-card ${isLowEnd ? 'none-blur' : ''} p-4 md:p-8 flex flex-col justify-between overflow-hidden text-left h-full`}
             >
               {/* Backing Warm Light Overlay */}
               <div 
@@ -135,7 +135,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
 
               {/* Product Image & Float Animation */}
               <div 
-                className="relative h-72 w-full flex items-center justify-center mb-6 cursor-pointer"
+                className="relative h-48 md:h-72 w-full flex items-center justify-center mb-3 md:mb-6 cursor-pointer -mt-2 md:mt-0"
               >
                 {/* Immersive Floating Heart Wishlist Trigger */}
                 <button
@@ -162,7 +162,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
                   onClick={() => onViewDetails(product)}
                   src={product.image.startsWith('http') ? product.image : `${API_BASE_URL}${product.image}`}
                   alt={product.name}
-                  className="h-64 object-contain transform scale-110 group-hover:scale-120 group-hover:-translate-y-6 group-hover:rotate-1 transition-all duration-700 filter drop-shadow-[0_20px_30px_rgba(0,0,0,0.9)]"
+                  className="h-40 md:h-64 w-full object-contain transform scale-110 group-hover:scale-120 group-hover:-translate-y-6 group-hover:rotate-1 transition-all duration-700 filter drop-shadow-[0_20px_30px_rgba(0,0,0,0.9)]"
                 />
               </div>
 
@@ -170,7 +170,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
               <div className="flex-grow flex flex-col justify-between">
                 <div>
                   {/* Category & Specifications */}
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-2 md:mb-4">
                     <span className="text-[9px] font-sans tracking-widest text-warm-gold uppercase font-bold bg-bean/30 border border-warm-gold/15 px-2.5 py-0.5 rounded-md inline-block">
                       {product.roast}
                     </span>
@@ -182,20 +182,20 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
                   {/* Product Title */}
                   <h3 
                     onClick={() => onViewDetails(product)}
-                    className="text-xl font-playfair font-bold text-cream-latte mb-3 group-hover:text-warm-gold transition-colors duration-300 cursor-pointer line-clamp-1"
+                    className="text-lg md:text-xl font-playfair font-bold text-cream-latte mb-1 md:mb-3 group-hover:text-warm-gold transition-colors duration-300 cursor-pointer line-clamp-1"
                   >
                     {product.name}
                   </h3>
 
                   {/* Description */}
-                  <p className="text-xs text-cream-latte/55 font-sans leading-relaxed mb-6 line-clamp-2">
+                  <p className="text-[10px] md:text-xs text-cream-latte/55 font-sans leading-relaxed mb-3 md:mb-6 line-clamp-2">
                     {product.description}
                   </p>
                 </div>
 
                 <div>
                   {/* Tasting Notes */}
-                  <div className="flex flex-wrap gap-1.5 mb-6">
+                  <div className="flex flex-wrap gap-1.5 mb-3 md:mb-6">
                     {product.tastingNotes.slice(0, 3).map((note) => (
                       <span
                         key={note}
@@ -207,7 +207,7 @@ export default function ProductShowcase({ onAddToBag, onViewDetails, wishlist, o
                   </div>
 
                   {/* Price and Action Buttons */}
-                  <div className="flex items-center justify-between border-t border-warm-gold/10 pt-5 mt-auto">
+                  <div className="flex items-center justify-between border-t border-warm-gold/10 pt-3 md:pt-5 mt-auto">
                     <div className="flex flex-col text-left">
                       <span className="font-bebas text-2xl text-warm-gold tracking-widest leading-none">
                         ₹{product.price}.00

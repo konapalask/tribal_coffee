@@ -83,9 +83,9 @@ export default function Navbar({ onCartToggle, cartCount = 2, onAdminToggle, use
   return (
     <nav
       id="top-navbar"
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ease-out py-6 md:py-8 ${
+      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ease-out py-3 md:py-8 ${
         isScrolled
-          ? 'py-4 md:py-4 shadow-[0_4px_20px_rgba(0,0,0,0.18)]'
+          ? 'py-2 md:py-4 shadow-[0_4px_20px_rgba(0,0,0,0.18)]'
           : ''
       }`}
       style={{
@@ -118,7 +118,7 @@ export default function Navbar({ onCartToggle, cartCount = 2, onAdminToggle, use
             <img 
               src="/images/Logo-Registered.webp" 
               alt="Tribal Coffee Logo" 
-              className="h-8 md:h-9 w-auto object-contain filter invert brightness-110 group-hover:rotate-[12deg] transition-all duration-500"
+              className="h-6 md:h-9 w-auto object-contain filter invert brightness-110 group-hover:rotate-[12deg] transition-all duration-500"
             />
           </div>
           <span className="font-bebas text-base md:text-lg tracking-[0.18em] text-cream-latte group-hover:text-warm-gold transition-colors duration-500">
@@ -206,14 +206,13 @@ export default function Navbar({ onCartToggle, cartCount = 2, onAdminToggle, use
         </div>
 
         {/* RIGHT ICONS - Circular Glassmorphic slot containers */}
-        <div className="flex items-center gap-3 md:gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           
-
           {/* User Account Profile slot */}
           <button
             id="nav-user-btn"
             onClick={onAdminToggle}
-            className="p-2.5 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 relative group cursor-pointer shadow-md hover:scale-105"
+            className="p-2 md:p-2.5 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 relative group cursor-pointer shadow-md hover:scale-105"
             aria-label="User Account Login"
             title={userInitials ? "Logged In (Click to Logout)" : "User Account Login"}
           >
@@ -229,7 +228,7 @@ export default function Navbar({ onCartToggle, cartCount = 2, onAdminToggle, use
           {/* Search Trigger slot */}
           <button
             id="nav-search-btn"
-            className="p-2.5 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 relative group cursor-pointer shadow-md hover:scale-105"
+            className="p-2 md:p-2.5 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 relative group cursor-pointer shadow-md hover:scale-105"
             aria-label="Search Shop"
           >
             <Search size={16} className="stroke-[2.5] text-cream-latte group-hover:text-warm-gold transition-colors" />
@@ -240,7 +239,7 @@ export default function Navbar({ onCartToggle, cartCount = 2, onAdminToggle, use
           <button
             id="nav-cart-btn"
             onClick={onCartToggle}
-            className="p-2.5 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 relative group cursor-pointer shadow-md hover:scale-105"
+            className="p-2 md:p-2.5 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 relative group cursor-pointer shadow-md hover:scale-105"
             aria-label="Open Shopping Cart"
           >
             <ShoppingBag size={16} className="stroke-[2.5] text-cream-latte group-hover:text-warm-gold transition-colors" />
@@ -255,7 +254,7 @@ export default function Navbar({ onCartToggle, cartCount = 2, onAdminToggle, use
           <button
             id="nav-mobile-toggle"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2.5 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 cursor-pointer text-cream-latte hover:text-warm-gold shadow-md"
+            className="md:hidden p-2 bg-cream-latte/5 hover:bg-warm-gold/15 border border-cream-latte/10 hover:border-warm-gold/30 rounded-full transition-all duration-300 cursor-pointer text-cream-latte hover:text-warm-gold shadow-md"
             aria-label="Toggle Navigation Menu"
           >
             {isMobileMenuOpen ? <X size={16} /> : <Menu size={16} />}

@@ -38,6 +38,33 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
   const [glowOffset, setGlowOffset] = useState({ x: 0, y: 0 });
   const mousePos = { x: 0, y: 0 };
 
+  // Swipe gesture handling
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    if (isLeftSwipe) {
+      nextSlide();
+    }
+    if (isRightSwipe) {
+      prevSlide();
+    }
+  };
+
 
   // Circular offset function to determine 3D positions of the 5 products
   const getOffset = (idx: number) => {
@@ -155,7 +182,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={handleSectionMouseLeave}
       onMouseMove={handleSectionMouseMove}
-      className="relative min-h-screen w-full flex flex-col justify-center overflow-hidden pt-20 md:pt-24 pb-16 transition-colors duration-1000 ease-in-out z-10 bg-gradient-hero-to-shop"
+      className="relative min-h-screen w-full flex flex-col justify-center overflow-hidden pt-16 md:pt-24 pb-16 transition-colors duration-1000 ease-in-out z-10 bg-gradient-hero-to-shop"
     >
       {/* GPU-Composited Custom keyframes to animate coffee beans and smoke on the GPU thread with 0% CPU cost */}
       <style dangerouslySetInnerHTML={{__html: `
@@ -326,10 +353,10 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
       </div>
 
       {/* 4. MAIN SPLIT CONTENT GRID CONTAINER */}
-      <div className="w-full max-w-[1650px] mx-auto px-6 md:px-12 flex flex-col md:grid md:grid-cols-[0.95fr_1.05fr] gap-12 md:gap-8 items-center justify-center flex-grow z-10 relative">
+      <div className="w-full max-w-[1650px] mx-auto px-4 md:px-12 flex flex-col md:grid md:grid-cols-[0.95fr_1.05fr] gap-2 md:gap-8 items-center justify-center flex-grow z-10 relative">
         
         {/* LEFT COLUMN: Product information & navigation selector */}
-        <div className="order-2 md:order-1 text-left flex flex-col justify-center min-h-[340px] md:min-h-[450px] w-full">
+        <div className="order-2 md:order-1 text-center md:text-left flex flex-col justify-center min-h-[340px] md:min-h-[450px] w-full items-center md:items-start">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeProduct?.id || 'empty'}
@@ -339,33 +366,39 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
               transition={{ duration: 0.8, ease: [0.76, 0, 0.24, 1] }}
               style={{ willChange: 'transform, opacity' }}
               id={`hero-content-${activeProduct?.id || 'empty'}`}
-              className="flex flex-col text-left justify-center w-full max-w-[540px]"
+              className="flex flex-col text-center md:text-left justify-center items-center md:items-start w-full max-w-[540px]"
             >
               {/* Tagline */}
-              <span className="text-xs font-sans tracking-[0.3em] text-warm-gold font-bold uppercase mb-2 block">
+              <span className="text-[10px] md:text-xs font-sans tracking-[0.3em] text-warm-gold font-bold uppercase mb-1 md:mb-2 block">
                 {activeProduct?.tagline || ''}
               </span>
 
               {/* Product Title */}
-              <h2 className="text-3xl md:text-5xl font-playfair font-bold text-cream-latte leading-tight mb-4">
+              <h2 className="text-2xl md:text-5xl font-playfair font-bold text-cream-latte leading-tight mb-1 md:mb-4">
                 {activeProduct?.name || ''}
               </h2>
 
+              {/* Mobile Price */}
+              <div className="block md:hidden mb-4 text-xl font-bebas text-warm-gold tracking-widest">
+                ₹{activeProduct?.price || 0}.00
+              </div>
+
               {/* Specifications & Price */}
-              <div className="flex items-center gap-4 mb-4 text-sm text-cream-latte/70 font-sans">
-                <span className="bg-bean/60 border border-warm-gold/20 px-3 py-1 rounded-full text-xs font-medium tracking-wide uppercase">
+              <div className="flex flex-wrap justify-center md:justify-start items-center gap-2 md:gap-4 mb-4 text-sm text-cream-latte/70 font-sans">
+                <span className="bg-bean/60 border border-warm-gold/20 px-3 py-1 rounded-full text-[10px] md:text-xs font-medium tracking-wide uppercase">
                   {activeProduct?.roast || ''}
                 </span>
-                <span className="bg-cream-latte/5 border border-cream-latte/15 px-3 py-1 rounded-full text-xs tracking-wide uppercase">
+                <span className="bg-cream-latte/5 border border-cream-latte/15 px-3 py-1 rounded-full text-[10px] md:text-xs tracking-wide uppercase">
                   {activeProduct?.chicory || ''}
                 </span>
-                <span className="font-bebas text-2xl text-warm-gold tracking-widest">
+                {/* Desktop Price */}
+                <span className="hidden md:block font-bebas text-2xl text-warm-gold tracking-widest">
                   ₹{activeProduct?.price || 0}.00
                 </span>
               </div>
 
               {/* Description */}
-              <div className="mb-6 max-w-md">
+              <div className="mb-4 md:mb-6 max-w-md">
                 <p className={`text-sm md:text-base text-cream-latte/70 font-sans leading-relaxed ${isTextExpanded ? '' : 'line-clamp-2'}`}>
                   {activeProduct?.description || ''}
                 </p>
@@ -380,11 +413,11 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
               </div>
 
               {/* Tasting Notes */}
-              <div className="flex flex-wrap gap-2 mb-8">
+              <div className="flex flex-wrap justify-center md:justify-start gap-1.5 md:gap-2 mb-4 md:mb-8">
                 {activeProduct?.tastingNotes?.map((note) => (
                   <span 
                     key={note} 
-                    className="text-xs font-sans font-medium px-3 py-1.5 rounded-md glassmorphism text-cream-latte/90 flex items-center gap-1.5 border border-warm-gold/5"
+                    className="text-[10px] md:text-xs font-sans font-medium px-2 md:px-3 py-1 md:py-1.5 rounded-md glassmorphism text-cream-latte/90 flex items-center gap-1 md:gap-1.5 border border-warm-gold/5"
                   >
                     <span className="w-1.5 h-1.5 bg-warm-gold rounded-full" />
                     {note}
@@ -393,18 +426,18 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
               </div>
 
               {/* CTA Buttons */}
-              <div className="flex items-center gap-4 mb-8">
+              <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-3 md:gap-4 mb-6 md:mb-8 w-full">
                 <button
                   id={`hero-buy-now-${activeProduct?.id || 'empty'}`}
                   onClick={() => activeProduct && onAddToBag(activeProduct)}
-                  className="bg-warm-gold text-espresso font-sans text-xs font-bold tracking-widest uppercase px-8 py-4 rounded-full border border-warm-gold hover:bg-transparent hover:text-warm-gold hover:shadow-[0_0_20px_rgba(200,169,126,0.35)] transition-all duration-300 cursor-pointer"
+                  className="w-full md:w-auto bg-warm-gold text-espresso font-sans text-[10px] md:text-xs font-bold tracking-widest uppercase px-4 md:px-8 py-3 md:py-4 rounded-full border border-warm-gold hover:bg-transparent hover:text-warm-gold hover:shadow-[0_0_20px_rgba(200,169,126,0.35)] transition-all duration-300 cursor-pointer whitespace-nowrap text-center"
                 >
                   Buy Now
                 </button>
                 <button
                   id={`hero-view-details-${activeProduct?.id || 'empty'}`}
                   onClick={() => activeProduct && onViewDetails(activeProduct)}
-                  className="text-cream-latte hover:text-warm-gold bg-transparent font-sans text-xs font-bold tracking-widest uppercase px-6 py-4 border border-cream-latte/20 hover:border-warm-gold rounded-full transition-all duration-300 flex items-center gap-2 group cursor-pointer"
+                  className="w-full md:w-auto text-cream-latte hover:text-warm-gold bg-transparent font-sans text-[10px] md:text-xs font-bold tracking-widest uppercase px-4 md:px-6 py-3 md:py-4 border border-cream-latte/20 hover:border-warm-gold rounded-full transition-all duration-300 flex items-center justify-center gap-1 md:gap-2 group cursor-pointer whitespace-nowrap"
                 >
                   View Details
                   <span className="transform group-hover:translate-x-1 transition-transform duration-300">→</span>
@@ -414,13 +447,13 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           </AnimatePresence>
 
           {/* Interactive Glassmorphic Thumbnail Selector - containing ALL 5 products inside left content area */}
-          <div className="flex items-center gap-3 flex-wrap mt-4 md:mt-2">
+          <div className="flex items-center justify-start md:justify-start gap-2 md:gap-3 flex-nowrap md:flex-wrap overflow-x-auto no-scrollbar w-[calc(100vw-32px)] md:w-full mt-2 md:mt-2 snap-x pb-2 md:pb-0 mx-auto">
             {TRIBAL_PRODUCTS.map((p, idx) => (
               <button
                 key={p.id}
                 onClick={() => setActiveIndex(idx)}
                 id={`carousel-thumbnail-${p.id}`}
-                className={`relative w-14 h-14 p-2 rounded-2xl cursor-pointer transition-all duration-500 flex items-center justify-center glassmorphism overflow-hidden ${
+                className={`flex-shrink-0 snap-center relative w-12 h-12 md:w-14 md:h-14 p-1.5 md:p-2 rounded-2xl cursor-pointer transition-all duration-500 flex items-center justify-center glassmorphism overflow-hidden ${
                   activeIndex === idx 
                     ? 'border-2 border-warm-gold shadow-[0_0_15px_rgba(214,178,122,0.4)] blur-none brightness-110 scale-105 z-10' 
                     : 'opacity-40 hover:opacity-80 blur-[0.5px] hover:blur-none border border-cream-latte/10 scale-95 hover:scale-100 hover:z-10'
@@ -435,7 +468,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
                   alt={p.name}
                   loading="eager"
                   decoding="async"
-                  className="h-10 w-auto object-contain drop-shadow-[0_3px_6px_rgba(0,0,0,0.5)] transform hover:scale-110 transition-transform duration-300"
+                  className="h-8 md:h-10 w-auto object-contain drop-shadow-[0_3px_6px_rgba(0,0,0,0.5)] transform hover:scale-110 transition-transform duration-300"
                 />
               </button>
             ))}
@@ -443,18 +476,23 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
         </div>
 
         {/* RIGHT COLUMN: Premium 3D Rotating Carousel */}
-        <div className="order-1 md:order-2 w-full h-[380px] sm:h-[460px] md:h-[580px] lg:h-[700px] relative flex items-center justify-center overflow-visible">
+        <div className="order-1 md:order-2 w-full h-[320px] sm:h-[400px] md:h-[580px] lg:h-[700px] relative flex items-center justify-center overflow-visible">
           {/* Floating Left Navigation Button */}
           <button
             onClick={prevSlide}
-            className="absolute left-2 md:-left-16 lg:-left-24 top-1/2 -translate-y-1/2 z-40 p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
+            className="hidden md:block absolute left-0 sm:left-2 md:-left-16 lg:-left-24 top-1/2 -translate-y-1/2 z-40 p-2 md:p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
             aria-label="Previous Product"
           >
-            <ArrowLeft size={20} className="stroke-[2] group-hover:-translate-x-0.5 transition-transform duration-300" />
+            <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 stroke-[2] group-hover:-translate-x-0.5 transition-transform duration-300" />
           </button>
 
           {/* Unified 3D Carousel container */}
-          <div className="relative w-full h-full flex items-center justify-center select-none overflow-visible">
+          <div 
+            className="relative w-full h-full flex items-center justify-center select-none overflow-visible touch-pan-y"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
             {TRIBAL_PRODUCTS.map((product, idx) => {
               const offset = getOffset(idx);
               const isActive = offset === 0;
@@ -543,7 +581,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
                     }
                   }}
                   id={`carousel-card-${product.id}`}
-                  className="absolute flex flex-col items-center justify-center w-[250px] h-[330px] sm:w-[280px] sm:h-[360px] md:w-[380px] md:h-[520px] lg:w-[500px] lg:h-[680px] cursor-pointer select-none"
+                  className="absolute flex flex-col items-center justify-center w-[85vw] max-w-[340px] h-[300px] sm:w-[400px] sm:h-[380px] md:w-[380px] md:h-[520px] lg:w-[500px] lg:h-[680px] cursor-pointer select-none"
                 >
                   {/* Gold Ambient Backing Light - shifting dynamically in opposite parallax direction */}
                   {isActive && (
@@ -578,7 +616,7 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
                     }}
                   >
                     {/* Uniform Aspect-Locked Product Package Image Container */}
-                    <div className="w-[250px] h-[330px] sm:w-[280px] sm:h-[360px] md:w-[380px] md:h-[500px] lg:w-[520px] lg:h-[650px] flex items-center justify-center relative overflow-visible">
+                    <div className="w-full h-full md:w-[380px] md:h-[500px] lg:w-[520px] lg:h-[650px] flex items-center justify-center relative overflow-visible">
                       <img
                         src={product.image.startsWith('http') ? product.image : `${API_BASE_URL}${product.image}`}
                         alt={product.name}
@@ -606,16 +644,16 @@ export default function Hero({ onAddToBag, onViewDetails }: HeroProps) {
           {/* Floating Right Navigation Button */}
           <button
             onClick={nextSlide}
-            className="absolute right-2 md:-right-16 lg:-right-24 top-1/2 -translate-y-1/2 z-40 p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
+            className="hidden md:block absolute right-0 sm:right-2 md:-right-16 lg:-right-24 top-1/2 -translate-y-1/2 z-40 p-2 md:p-4 rounded-full backdrop-blur-md bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-warm-gold/40 hover:scale-110 transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] cursor-pointer group"
             aria-label="Next Product"
           >
-            <ArrowRight size={20} className="stroke-[2] group-hover:translate-x-0.5 transition-transform duration-300" />
+            <ArrowRight className="w-4 h-4 md:w-5 md:h-5 stroke-[2] group-hover:translate-x-0.5 transition-transform duration-300" />
           </button>        </div>
 
       </div>
 
       {/* Scroll Down Indicator */}
-      <div className="absolute bottom-36 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center z-50">
+      <div className="hidden md:flex absolute bottom-36 left-1/2 -translate-x-1/2 flex-col items-center justify-center z-50">
         <a 
           href="#shop" 
           className="text-[9px] font-sans tracking-[0.3em] text-warm-gold/50 hover:text-warm-gold uppercase font-bold flex flex-col items-center gap-2 transition-colors group"
